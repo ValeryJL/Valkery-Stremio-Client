@@ -1,151 +1,152 @@
-
 <h1 align="center">
   <br>
-    <a href="https://github.com/DonutWare/Fladder"><img src="https://raw.githubusercontent.com/DonutWare/Fladder/refs/heads/develop/icons/production/fladder_macos_icon.png" alt="Fladder" width="200"></a>
+  <img src="assets/icons/valkery_icon.png" alt="Valkery Media Client" width="160">
   <br>
-  Fladder
+  Valkery Media Client
   <br>
 </h1>
 
-<h4 align="center">A cross-platform Jellyfin Frontend built on top of <a href="https://flutter.dev/" target="_blank">Flutter</a>.</h4>
+<h4 align="center">Cliente de medios unificado multiplataforma que fusiona la potencia del motor <b>Stremio</b> con el ecosistema <b>Jellyfin / Seerr</b>, interfaz fluida de cristal translúcido en color violeta, descargas offline y reproducción acelerada por hardware.</h4>
 
 <p align="center">
-  <a href="#key-features">Key Features</a> •
-  <a href="#screenshots">Screenshots</a> •
-  <a href="#planned-features">Planned Features</a> •
-  <a href="#download">Download</a> •
-  <a href="#how-to-contribute">Contributing</a> •
-  <a href="#credits">Credits</a> •
-  <a href="#license">License</a>
+  <a href="#características-principales">Características</a> •
+  <a href="#arquitectura-híbrida">Arquitectura</a> •
+  <a href="#visión-offline">Visión Offline</a> •
+  <a href="#instalación-y-ejecución">Instalación</a> •
+  <a href="#despliegue-en-servidor-web-docker">Servidor Web / Docker</a> •
+  <a href="#licencia">Licencia</a>
 </p>
 
 <div align="center">
-  
-  [![Build](https://github.com/DonutWare/Fladder/actions/workflows/build.yml/badge.svg?branch=develop)](https://github.com/DonutWare/Fladder/actions/workflows/build.yml)
-  [![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/DonutWare/fladder/total)](https://github.com/DonutWare/Fladder/releases/latest)
-  [![GitHub Release](https://img.shields.io/github/v/release/DonutWare/fladder?display_name=tag)](https://github.com/DonutWare/Fladder/releases/latest)
-  [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)
-  
+  <img src="https://img.shields.io/badge/Flutter-3.27%2B-02569B?logo=flutter" alt="Flutter">
+  <img src="https://img.shields.io/badge/Dart-3.6%2B-0175C2?logo=dart" alt="Dart">
+  <img src="https://img.shields.io/badge/Theme-Valkery%20Violet%20%238B5CF6-8B5CF6" alt="Valkery Theme">
+  <img src="https://img.shields.io/badge/Engine-Stremio%20Daemon%2011470-purple" alt="Stremio Engine">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android%20%7C%20Web-blue" alt="Multiplatform">
 </div>
 
+---
 
+## Características Principales
 
-## Key Features
+* 🟣 **Motor Stremio Nativo**: Exploración fluida del catálogo Cinemeta y Addons comunitarios/privados (Torrentio, Anime, Cyberflix, etc.).
+* ⚡ **Streaming Server Embebido (Zero-Setup)**: La aplicación detecta y ejecuta automáticamente el daemon local de Stremio en `http://127.0.0.1:11470` en segundo plano sin intervención manual del usuario.
+* 📦 **Visión Offline Persistente**: Descarga de video en segundo plano junto con pistas de subtítulos (`.srt` / `.vtt`) y carátulas en almacenamiento local para reproducir sin conexión a internet.
+* 🎛️ **Doble Vinculación Inteligente (Zero-Clutter)**:
+  * Si solo usas Stremio: la aplicación se comporta como un cliente puro de Stremio (sin pantallas vacías ni avisos de Jellyfin).
+  * Si conectas tu servidor Jellyfin: se activa la experiencia híbrida para acceder a tus bibliotecas y solicitudes con el stack Seerr.
+* 👤 **Modo Invitado y Autenticado**: Explora catálogos y reproduce en local sin necesidad de crear cuenta; o inicia sesión con Stremio para sincronizar addons y progreso en la nube (`datastorePut/Get`).
+* 🎬 **Reproducción Multimodal con MediaKit**:
+  * Decodificación de video con aceleración por hardware (D3D11 / VAAPI / Metal / MediaCodec).
+  * Picture-in-Picture (PiP) nativo y mini-reproductor flotante mientras navegas el catálogo.
+  * Compatibilidad con reproductores externos (VLC / MPV) configurable en Ajustes.
+* 🎨 **Diseño Moderno Glassmorphism**: Tarjetas translúcidas con desenfoque de fondo (`BackdropFilter`), gradientes cinematográficos y paleta violeta `#8B5CF6` por defecto.
+* 🌐 **Soporte Web y Docker para Servidores**: Compilación Web PWA e imagen Docker multi-stage con Nginx optimizada para desplegar en tu propio VPS o servidor local.
 
-* Play media – Stream or sync content locally to your device
-* Manage your library – Refresh content and edit metadata
-* Multiple profiles – add multiple users or different servers easily switching between
-* Direct, Transcode and Offline playback
-* Media segments skipping (Intro/Credits etc.)
-* Trickplay support (timeline scrubbing)
-* Dark/Light mode and multiple color styles to pick
-* Simple comic book format reading support (.cbz, .cbr)
-* Sync items for all platforms
-* Download items and keep progress in sync
-* Keyboard shortcuts
-* Adaptive layout for all platforms
-* Next-up overview when watching a queue
-* Server management
-* Seerr/Jellyseerr integration
-* Platforms
-  - Android + TV
-  - Web + Docker
-  - macOS
-  - Windows 
-  - iOS 
-  - Linux 
- 
-## Screenshots
-<details close>
-  <summary>Mobile</summary>
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Mobile/Dashboard.png?raw=true" alt="Fladder" width="200">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Mobile/Details.png?raw=true" alt="Fladder" width="200">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Mobile/Details_2.png?raw=true" alt="Fladder" width="200">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Mobile/Favourites.png?raw=true" alt="Fladder" width="200">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Mobile/Library.png?raw=true" alt="Fladder" width="200">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Mobile/Library_Search.png?raw=true" alt="Fladder" width="200">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Mobile/Resume_Tab.png?raw=true" alt="Fladder" width="200">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Mobile/Sync.png?raw=true" alt="Fladder" width="200">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Mobile/Settings.png?raw=true" alt="Fladder" width="200">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Mobile/Player.png?raw=true" alt="Fladder" width="1280">  
-</details>
+---
 
-<details close>
-  <summary>Tablet</summary>
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Tablet/Dashboard.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Tablet/Details.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Tablet/Details_2.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Tablet/Favourites.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Tablet/Library.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Tablet/Library_Search.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Tablet/Resume_Tab.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Tablet/Sync.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Tablet/Settings.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Tablet/Player.png?raw=true" alt="Fladder" width="1280">   
-</details>
+## Arquitectura Híbrida
 
-<details close>
-  <summary>Television</summary>
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Television/Dashboard.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Television/Details.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Television/Favourites.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Television/Library.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Television/Library_Search.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Television/Sync.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Television/Settings.png?raw=true" alt="Fladder" width="1280">  
-   <img src="https://github.com/DonutWare/Fladder/blob/develop/assets/marketing/screenshots/Television/Player.png?raw=true" alt="Fladder" width="1280">   
-</details>
+```
+┌─────────────────────────────────────────────────────────────────┐
+│               Valkery UI (Base Fladder Glassmorphism)           │
+│         [ Stremio Discover ]  [ Descargas Offline ]  [ Ajustes ] │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+               ┌────────────────┴────────────────┐
+               ▼                                 ▼
+      [ Stremio Core Suite ]          [ Jellyfin / Seerr Stack ]
+      • StremioApiService             • Client OpenAPI
+      • CatalogAndStreamService       • User Session
+      • StremioOfflineDownloadManager • Jellyseerr Requests
+               │
+               ▼
+   [ Stremio Server Daemon ]
+   http://127.0.0.1:11470
+   (Auto-detectado y ejecutado en background)
+               │
+               ▼
+   [ Reproductor MediaKit + Hardware Accel ]
+   (Soporte de subtítulos, PiP y miniatura)
+```
 
-Web/Desktop [try out the web build!](https://DonutWare.github.io/Fladder)
-> [!NOTE]
-> The GitHub hosted web build only allows `https` connections. This is a limitation on GitHub's end, for self-hosted versions `http` works fine.
+---
 
-## Planned Features
+## Visión Offline
 
-* Chromecast support
-* Improved dPad navigation for non-tv devices
-* [And more???](https://github.com/DonutWare/Fladder/discussions/categories/ideas)
+Valkery permite guardar cualquier película o episodio en tu dispositivo:
+1. En la vista de detalle de cualquier contenido, pulsa el icono de **Descarga Offline** en la fuente deseada.
+2. La app descargará de forma paralela el video por chunks, las pistas de subtítulos sincronizadas y los metadatos.
+3. Ve a la pestaña **Offline**: podrás pausar, monitorear el progreso y reproducir tus archivos locales sin conexión a internet.
+4. En la versión **Web**, la app dispara la descarga directa a través del navegador.
 
-## Download
+---
 
-The latest executables for Windows, macOS, Linux, iOS, Android and Web can be found on the [releases page](https://github.com/DonutWare/Fladder/releases).
+## Instalación y Ejecución
 
-You can pull the Docker version using the following tags: ```ghcr.io/donutware/fladder:latest```. or ```ghcr.io/donutware/fladder-rootless:latest```
+### Prerrequisitos
+* [Flutter SDK](https://flutter.dev) (versión 3.27 o superior)
+* Visual Studio 2022 con C++ (para Windows nativo)
 
-*Platform-specific installation and usage instructions can be found [here](https://github.com/DonutWare/Fladder/blob/develop/INSTALL.md).*
+### 1. Clonar el repositorio
+```bash
+git clone https://github.com/ValeryJL/Valkery-Stremio-Client.git
+cd Valkery-Stremio-Client
+```
 
-<a href='https://play.google.com/store/apps/details?id=nl.jknaapen.fladder&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1'><img alt='Get it on Google Play' src='https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png' width=250 align='middle'/></a>
-<a href='https://flathub.org/apps/nl.jknaapen.fladder'><img alt='Get it on Flathub' src='https://flathub.org/api/badge?locale=en' width=192 align='middle'/></a>
+### 2. Instalar dependencias
+```bash
+flutter pub get
+```
 
-> [!WARNING]
-> (Windows) Some flutter applications are marked as false positives by windows defender for more info see [this issue](https://github.com/DonutWare/Fladder/issues/197#issuecomment-2568906874).
+### 3. Ejecutar pruebas unitarias
+```bash
+flutter test test/valkery_verification_test.dart
+```
 
-## How to Contribute
-Interested in contributing? Here are a couple of ways you can help:
+### 4. Ejecutar en Windows
+```bash
+flutter run -d windows
+```
 
-### 🐛 Reporting Bugs
-- Before reporting a bug, **please ensure** that the issue hasn't been reported already.
-- When submitting a bug report, provide detailed steps on how the bug can be reproduced. This will help us to understand and fix the issue faster.
-- Bug reports are appreciated and very helpful!
+### 5. Ejecutar en el Navegador Web
+```bash
+flutter run -d chrome
+```
 
-### 🚀 Submitting Pull Requests
-- **Pull requests are always welcome!** 
-- For new features or large changes, please open a discussion or issue first to ensure that no one else is already working on it.
-- **Keep pull requests short and focused**: try to avoid fixing multiple issues in a single pull request. This helps make the review process smoother and quicker.
+---
 
-### 🌐 Translations 
-<a href="https://hosted.weblate.org/engage/fladder/">
-<img src="https://hosted.weblate.org/widget/fladder/fladder/multi-auto.svg" alt="Translation status" />
-</a>
+## Despliegue en Servidor Web (Docker)
 
-Thank you for helping to make this project better! 🙌
+Puedes compilar y ejecutar Valkery en cualquier servidor casero (Home Server, Unraid, TrueNAS, VPS) con un solo comando:
 
+```bash
+# Construir la imagen Docker optimizada con Nginx Alpine
+docker build -t valkery-media-client -f docker/Dockerfile .
 
-## Credits
+# Correr el contenedor en el puerto 8080
+docker run -d -p 8080:8080 --name valkery valkery-media-client
+```
 
-This software uses the following open source packages:
-- [Flutter](https://flutter.dev/)
+Luego accede desde cualquier dispositivo en tu red local abriendo `http://<IP_DE_TU_SERVIDOR>:8080`.
 
-## License
+---
 
-This project is licensed under the GNU General Public License v3.0. More information about the license can be found in [this file](https://github.com/DonutWare/Fladder/blob/develop/LICENSE).
+## Estructura Git y Mantenibilidad Upstream
+
+Valkery mantiene un vínculo con el repositorio upstream de Fladder para incorporar futuras mejoras de la interfaz sin romper la integración de Stremio:
+
+* **Origin**: `https://github.com/ValeryJL/Valkery-Stremio-Client.git`
+* **Upstream**: `https://github.com/DonutWare/Fladder.git`
+
+Para recibir actualizaciones futuras de upstream:
+```bash
+git fetch upstream
+git merge upstream/main
+```
+
+---
+
+## Licencia
+
+Distribuido bajo la licencia GPL-3.0. Consulta `LICENSE` para más detalles.
