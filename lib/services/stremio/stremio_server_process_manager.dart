@@ -123,7 +123,9 @@ class StremioServerProcessManager {
   /// Attempts to locate and spawn the official Stremio runtime / service daemon.
   Future<bool> startLocalServer({String? executableOverride}) async {
     if (kIsWeb) return false;
-    if (_status.isOnline) return true;
+    // Check health first to avoid spawning if already running
+    final initialCheck = await checkHealth();
+    if (initialCheck.isOnline) return true;
 
     _status = StremioServerStatus(
       state: StremioServerState.starting,
@@ -143,15 +145,27 @@ class StremioServerProcessManager {
     }
 
     try {
+      final exeFile = File(exePath);
+      final exeDir = exeFile.parent.path;
+      final serverJs = File('$exeDir${Platform.pathSeparator}server.js');
+
+      List<String> args;
+      if (serverJs.existsSync()) {
+        args = [serverJs.path];
+      } else {
+        args = ['--port=11470'];
+      }
+
       final process = await Process.start(
         exePath,
-        ['--service', '--port=11470'],
+        args,
+        workingDirectory: exeDir,
         mode: ProcessStartMode.detached,
       );
       _serverProcess = process;
 
-      // Allow 2 seconds for socket bind and verify
-      await Future<void>.delayed(const Duration(milliseconds: 2000));
+      // Allow 2.5 seconds for socket bind and verify
+      await Future<void>.delayed(const Duration(milliseconds: 2500));
       final health = await checkHealth();
       return health.isOnline;
     } catch (e) {
@@ -165,7 +179,8 @@ class StremioServerProcessManager {
     }
   }
 
-  /// Locates standard installation paths for Stremio Service / runtime across platforms.
+  /// Locates standard installation paths for Stremio headless server / runtime.
+  /// NOTE: We deliberately EXCLUDE `stremio.exe` because that launches the Qt desktop GUI.
   static String? _detectInstalledStremioExecutable() {
     if (kIsWeb) return null;
 
@@ -173,21 +188,23 @@ class StremioServerProcessManager {
       final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
       final programFiles = Platform.environment['ProgramFiles'] ?? '';
       final candidates = [
-        '$localAppData\\Programs\\LNV\\Stremio-4\\stremio.exe',
+        // Stremio 4 headless Node runtime with server.js
+        '$localAppData\\Programs\\LNV\\Stremio-4\\stremio-runtime.exe',
         '$localAppData\\Programs\\LNV\\Stremio-4\\server.exe',
-        '$localAppData\\Programs\\Stremio\\stremio.exe',
+        '$localAppData\\Programs\\Stremio\\stremio-runtime.exe',
+        '$localAppData\\Programs\\Stremio\\server.exe',
         '$localAppData\\Stremio\\stremio-runtime.exe',
-        '$programFiles\\Stremio\\stremio.exe',
-        '$programFiles (x86)\\Stremio\\stremio.exe',
+        '$programFiles\\Stremio\\stremio-runtime.exe',
+        '$programFiles\\Stremio\\server.exe',
       ];
       for (final p in candidates) {
         if (File(p).existsSync()) return p;
       }
     } else if (Platform.isLinux) {
       final candidates = [
-        '/usr/bin/stremio',
         '/usr/bin/stremio-service',
-        '/opt/stremio/stremio',
+        '/usr/bin/stremio-runtime',
+        '/opt/stremio/stremio-runtime',
         '/var/lib/flatpak/exports/bin/com.stremio.Service',
       ];
       for (final p in candidates) {
@@ -195,8 +212,8 @@ class StremioServerProcessManager {
       }
     } else if (Platform.isMacOS) {
       final candidates = [
-        '/Applications/Stremio.app/Contents/MacOS/Stremio',
         '/Applications/Stremio.app/Contents/MacOS/stremio-runtime',
+        '/Applications/Stremio.app/Contents/MacOS/stremio-service',
       ];
       for (final p in candidates) {
         if (File(p).existsSync()) return p;
@@ -221,4 +238,3 @@ class StremioServerProcessManager {
     await _statusController.close();
   }
 }
-

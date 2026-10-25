@@ -14,6 +14,9 @@ class SourceCoordinatorState {
   final bool stremioGuestMode;
   final bool jellyfinGuestMode;
   final String stremioServerUrl;
+  final String jellyfinServerUrl;
+  final String? jellyfinServerName;
+  final String? jellyfinServerVersion;
   final ValkeryPlayerType preferredPlayer;
 
   const SourceCoordinatorState({
@@ -22,12 +25,17 @@ class SourceCoordinatorState {
     this.stremioGuestMode = true,
     this.jellyfinGuestMode = true,
     this.stremioServerUrl = 'http://127.0.0.1:11470',
+    this.jellyfinServerUrl = '',
+    this.jellyfinServerName,
+    this.jellyfinServerVersion,
     this.preferredPlayer = ValkeryPlayerType.mediaKit,
   });
 
-  bool get isDualSource => stremioEnabled && jellyfinEnabled;
-  bool get isStremioOnly => stremioEnabled && !jellyfinEnabled;
-  bool get isJellyfinOnly => !stremioEnabled && jellyfinEnabled;
+  bool get isJellyfinActive =>
+      jellyfinEnabled && jellyfinServerUrl.trim().isNotEmpty;
+  bool get isDualSource => stremioEnabled && isJellyfinActive;
+  bool get isStremioOnly => stremioEnabled && !isJellyfinActive;
+  bool get isJellyfinOnly => !stremioEnabled && isJellyfinActive;
 
   SourceCoordinatorState copyWith({
     bool? stremioEnabled,
@@ -35,6 +43,9 @@ class SourceCoordinatorState {
     bool? stremioGuestMode,
     bool? jellyfinGuestMode,
     String? stremioServerUrl,
+    String? jellyfinServerUrl,
+    String? jellyfinServerName,
+    String? jellyfinServerVersion,
     ValkeryPlayerType? preferredPlayer,
   }) {
     return SourceCoordinatorState(
@@ -43,6 +54,10 @@ class SourceCoordinatorState {
       stremioGuestMode: stremioGuestMode ?? this.stremioGuestMode,
       jellyfinGuestMode: jellyfinGuestMode ?? this.jellyfinGuestMode,
       stremioServerUrl: stremioServerUrl ?? this.stremioServerUrl,
+      jellyfinServerUrl: jellyfinServerUrl ?? this.jellyfinServerUrl,
+      jellyfinServerName: jellyfinServerName ?? this.jellyfinServerName,
+      jellyfinServerVersion:
+          jellyfinServerVersion ?? this.jellyfinServerVersion,
       preferredPlayer: preferredPlayer ?? this.preferredPlayer,
     );
   }
@@ -53,6 +68,9 @@ class SourceCoordinatorNotifier extends StateNotifier<SourceCoordinatorState> {
   static const _keyJellyfinEnabled = 'valkery_jellyfin_enabled';
   static const _keyStremioGuest = 'valkery_stremio_guest';
   static const _keyStremioServer = 'valkery_stremio_server_url';
+  static const _keyJellyfinServer = 'valkery_jellyfin_server_url';
+  static const _keyJellyfinName = 'valkery_jellyfin_server_name';
+  static const _keyJellyfinVersion = 'valkery_jellyfin_server_version';
   static const _keyPlayerType = 'valkery_preferred_player_type';
 
   SourceCoordinatorNotifier() : super(const SourceCoordinatorState()) {
@@ -63,14 +81,20 @@ class SourceCoordinatorNotifier extends StateNotifier<SourceCoordinatorState> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final stremioOn = prefs.getBool(_keyStremioEnabled) ?? true;
-      final jellyfinOn = prefs.getBool(_keyJellyfinEnabled) ?? false;
+      final jellyfinServer = prefs.getString(_keyJellyfinServer) ?? '';
+      final jellyfinOn = prefs.getBool(_keyJellyfinEnabled) ?? (jellyfinServer.isNotEmpty);
+      final jellyName = prefs.getString(_keyJellyfinName);
+      final jellyVersion = prefs.getString(_keyJellyfinVersion);
       final stremioGuest = prefs.getBool(_keyStremioGuest) ?? true;
       final serverUrl = prefs.getString(_keyStremioServer) ?? 'http://127.0.0.1:11470';
       final playerIndex = prefs.getInt(_keyPlayerType) ?? 0;
 
       state = SourceCoordinatorState(
         stremioEnabled: stremioOn,
-        jellyfinEnabled: jellyfinOn,
+        jellyfinEnabled: jellyfinOn && jellyfinServer.isNotEmpty,
+        jellyfinServerUrl: jellyfinServer,
+        jellyfinServerName: jellyName,
+        jellyfinServerVersion: jellyVersion,
         stremioGuestMode: stremioGuest,
         stremioServerUrl: serverUrl,
         preferredPlayer: ValkeryPlayerType.values[
@@ -86,10 +110,43 @@ class SourceCoordinatorNotifier extends StateNotifier<SourceCoordinatorState> {
     await prefs.setBool(_keyStremioEnabled, enabled);
   }
 
-  Future<void> setJellyfinEnabled(bool enabled) async {
-    state = state.copyWith(jellyfinEnabled: enabled);
+  Future<void> setJellyfinServer({
+    required String url,
+    String? serverName,
+    String? version,
+  }) async {
+    final clean = url.trim().replaceAll(RegExp(r'/+$'), '');
+    final isEnabled = clean.isNotEmpty;
+    state = state.copyWith(
+      jellyfinServerUrl: clean,
+      jellyfinEnabled: isEnabled,
+      jellyfinServerName: serverName,
+      jellyfinServerVersion: version,
+    );
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyJellyfinEnabled, enabled);
+    await prefs.setString(_keyJellyfinServer, clean);
+    await prefs.setBool(_keyJellyfinEnabled, isEnabled);
+    if (serverName != null) {
+      await prefs.setString(_keyJellyfinName, serverName);
+    }
+    if (version != null) {
+      await prefs.setString(_keyJellyfinVersion, version);
+    }
+  }
+
+  Future<void> disconnectJellyfin() async {
+    state = state.copyWith(
+      jellyfinServerUrl: '',
+      jellyfinEnabled: false,
+      jellyfinServerName: null,
+      jellyfinServerVersion: null,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyJellyfinServer);
+    await prefs.setBool(_keyJellyfinEnabled, false);
+    await prefs.remove(_keyJellyfinName);
+    await prefs.remove(_keyJellyfinVersion);
   }
 
   Future<void> setStremioGuestMode(bool isGuest) async {

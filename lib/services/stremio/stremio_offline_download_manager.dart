@@ -439,4 +439,3 @@ class StremioOfflineDownloadManager {
     await _updatesController.close();
   }
 }
-

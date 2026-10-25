@@ -20,13 +20,28 @@ void main() {
       expect(manager.currentStatus.isOnline, isFalse);
     });
 
-    test('SourceCoordinator defaults to Stremio-only without cluttering with Jellyfin', () {
-      const coordinator = SourceCoordinatorState();
-      expect(coordinator.stremioEnabled, isTrue);
-      expect(coordinator.jellyfinEnabled, isFalse);
-      expect(coordinator.isStremioOnly, isTrue);
-      expect(coordinator.isDualSource, isFalse);
-      expect(coordinator.preferredPlayer, equals(ValkeryPlayerType.mediaKit));
+    test('SourceCoordinator dynamically switches dual source and zero clutter on Jellyfin activation', () {
+      var state = const SourceCoordinatorState();
+      expect(state.isJellyfinActive, isFalse);
+      expect(state.isStremioOnly, isTrue);
+
+      // Activating with valid server URL
+      state = state.copyWith(
+        jellyfinEnabled: true,
+        jellyfinServerUrl: 'http://192.168.1.100:8096',
+        jellyfinServerName: 'Home Jellyfin',
+      );
+      expect(state.isJellyfinActive, isTrue);
+      expect(state.isDualSource, isTrue);
+      expect(state.isStremioOnly, isFalse);
+
+      // Disconnecting reverts to clean Stremio-only view
+      state = state.copyWith(
+        jellyfinEnabled: false,
+        jellyfinServerUrl: '',
+      );
+      expect(state.isJellyfinActive, isFalse);
+      expect(state.isStremioOnly, isTrue);
     });
 
     test('StreamCandidate generates valid playback URL for local Stremio server', () {

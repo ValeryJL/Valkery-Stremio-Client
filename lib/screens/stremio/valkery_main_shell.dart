@@ -5,6 +5,7 @@ import 'package:iconsax_plus/iconsax_plus.dart';
 import '../../providers/source_coordinator_provider.dart';
 import 'stremio_discover_screen.dart';
 import 'stremio_offline_screen.dart';
+import 'valkery_jellyfin_view.dart';
 import 'valkery_settings_screen.dart';
 
 class ValkeryMainShell extends ConsumerStatefulWidget {
@@ -26,8 +27,8 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
     final screens = <Widget>[
       const StremioDiscoverScreen(),
       const StremioOfflineScreen(),
-      if (coordinator.jellyfinEnabled)
-        const Center(child: Text('Jellyfin Library & Seerr View')),
+      if (coordinator.isJellyfinActive)
+        const ValkeryJellyfinView(),
       const ValkerySettingsScreen(),
     ];
 
@@ -42,7 +43,7 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
         selectedIcon: Icon(IconsaxPlusBold.folder_favorite, color: Color(0xFF8B5CF6)),
         label: 'Offline',
       ),
-      if (coordinator.jellyfinEnabled)
+      if (coordinator.isJellyfinActive)
         const NavigationDestination(
           icon: Icon(IconsaxPlusLinear.video_square),
           selectedIcon: Icon(IconsaxPlusBold.video_square, color: Color(0xFF8B5CF6)),
@@ -55,13 +56,15 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
       ),
     ];
 
+    final safeIndex = _currentIndex.clamp(0, screens.length - 1);
+
     if (isDesktop) {
       return Scaffold(
         body: Row(
           children: [
             NavigationRail(
               backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.6),
-              selectedIndex: _currentIndex,
+              selectedIndex: safeIndex,
               onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
               labelType: NavigationRailLabelType.all,
               leading: Padding(
@@ -89,7 +92,7 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
                       Icon(IconsaxPlusBold.folder_favorite, color: Color(0xFF8B5CF6)),
                   label: Text('Offline'),
                 ),
-                if (coordinator.jellyfinEnabled)
+                if (coordinator.isJellyfinActive)
                   const NavigationRailDestination(
                     icon: Icon(IconsaxPlusLinear.video_square),
                     selectedIcon:
@@ -107,7 +110,7 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
             const VerticalDivider(thickness: 1, width: 1),
             Expanded(
               child: IndexedStack(
-                index: _currentIndex,
+                index: safeIndex,
                 children: screens,
               ),
             ),
@@ -118,12 +121,12 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
 
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
+        index: safeIndex,
         children: screens,
       ),
       bottomNavigationBar: NavigationBar(
         backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.8),
-        selectedIndex: _currentIndex,
+        selectedIndex: safeIndex,
         onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
         destinations: destinations,
       ),

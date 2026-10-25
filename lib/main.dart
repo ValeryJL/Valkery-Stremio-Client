@@ -77,69 +77,14 @@ class _FladderApp extends ConsumerWidget {
         .select((value) => value.selectedLocale ?? WidgetsBinding.instance.platformDispatcher.locale));
     final scrollBehaviour = const MaterialScrollBehavior();
     final amoledOverwrite = amoledBlack ? Colors.black : null;
-    final coordinator = ref.watch(sourceCoordinatorProvider);
-    if (coordinator.isStremioOnly) {
-      return AdaptiveColor(
-        child: (darkTheme, lightTheme) => ThemesData(
-          light: lightTheme,
-          dark: darkTheme,
-          child: MaterialApp(
-            title: 'Valkery',
-            debugShowCheckedModeBanner: false,
-            theme: lightTheme,
-            darkTheme: darkTheme.copyWith(
-              scaffoldBackgroundColor: amoledOverwrite,
-              cardColor: amoledOverwrite,
-              canvasColor: amoledOverwrite,
-              colorScheme: darkTheme.colorScheme.copyWith(
-                surface: amoledOverwrite,
-                surfaceContainerHighest: amoledOverwrite,
-                surfaceContainerLow: amoledOverwrite,
-              ),
-            ),
-            themeMode: themeMode,
-            home: const ValkeryMainShell(),
-          ),
-        ),
-      );
-    }
-
     return AdaptiveColor(
       child: (darkTheme, lightTheme) => ThemesData(
         light: lightTheme,
         dark: darkTheme,
-        child: MaterialApp.router(
-          theme: lightTheme,
-          scrollBehavior: scrollBehaviour.copyWith(
-            dragDevices: {
-              ...scrollBehaviour.dragDevices,
-              mouseDrag ? PointerDeviceKind.mouse : null,
-            }.nonNulls.toSet(),
-          ),
-          localizationsDelegates: FladderLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: language,
-          localeResolutionCallback: (locale, supportedLocales) {
-            const fallback = Locale('en');
-            if (locale == null) return fallback;
-            if (supportedLocales.contains(locale)) {
-              return locale;
-            }
-            final matchByLanguage = supportedLocales.firstWhere(
-              (l) => l.languageCode == locale.languageCode,
-              orElse: () => fallback,
-            );
-
-            return matchByLanguage;
-          },
-          builder: (context, child) => MediaQueryScaler(
-            child: LocalizationContextWrapper(
-              child: PipLifecycleController(child: child ?? Container()),
-              currentLocale: language,
-            ),
-            enable: ref.read(argumentsStateProvider).leanBackMode,
-          ),
+        child: MaterialApp(
+          title: 'Valkery',
           debugShowCheckedModeBanner: false,
+          theme: lightTheme,
           darkTheme: darkTheme.copyWith(
             scaffoldBackgroundColor: amoledOverwrite,
             cardColor: amoledOverwrite,
@@ -151,9 +96,7 @@ class _FladderApp extends ConsumerWidget {
             ),
           ),
           themeMode: themeMode,
-          routerConfig: autoRouter.config(
-            deepLinkBuilder: (deepLink) => deepLinkBuilder(deepLink.uri),
-          ),
+          home: const ValkeryMainShell(),
         ),
       ),
     );

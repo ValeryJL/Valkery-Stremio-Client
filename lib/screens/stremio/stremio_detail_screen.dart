@@ -87,15 +87,15 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                 const SizedBox(height: 20),
                 if (_isSeries) _buildSeasonEpisodeSelectors(),
                 const SizedBox(height: 24),
-                Row(
+                const Row(
                   children: [
-                    const Icon(
+                    Icon(
                       IconsaxPlusBold.link_circle,
                       size: 20,
                       color: Color(0xFF8B5CF6),
                     ),
-                    const SizedBox(width: 8),
-                    const Text(
+                    SizedBox(width: 8),
+                    Text(
                       'Fuentes y Streams Disponibles',
                       style: TextStyle(
                         fontSize: 18,
