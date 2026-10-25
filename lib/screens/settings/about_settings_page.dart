@@ -28,7 +28,7 @@ const socials = [
   _Socials(
     'Github',
     'https://github.com/DonutWare/Fladder',
-    FontAwesomeIcons.githubAlt,
+    IconsaxPlusLinear.code,
   ),
   _Socials(
     'Weblate',
