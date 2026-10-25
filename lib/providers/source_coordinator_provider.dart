@@ -1,0 +1,118 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+enum ValkeryPlayerType {
+  mediaKit,
+  vlcExternal,
+  mpvExternal,
+  askEveryTime,
+}
+
+class SourceCoordinatorState {
+  final bool stremioEnabled;
+  final bool jellyfinEnabled;
+  final bool stremioGuestMode;
+  final bool jellyfinGuestMode;
+  final String stremioServerUrl;
+  final ValkeryPlayerType preferredPlayer;
+
+  const SourceCoordinatorState({
+    this.stremioEnabled = true,
+    this.jellyfinEnabled = false,
+    this.stremioGuestMode = true,
+    this.jellyfinGuestMode = true,
+    this.stremioServerUrl = 'http://127.0.0.1:11470',
+    this.preferredPlayer = ValkeryPlayerType.mediaKit,
+  });
+
+  bool get isDualSource => stremioEnabled && jellyfinEnabled;
+  bool get isStremioOnly => stremioEnabled && !jellyfinEnabled;
+  bool get isJellyfinOnly => !stremioEnabled && jellyfinEnabled;
+
+  SourceCoordinatorState copyWith({
+    bool? stremioEnabled,
+    bool? jellyfinEnabled,
+    bool? stremioGuestMode,
+    bool? jellyfinGuestMode,
+    String? stremioServerUrl,
+    ValkeryPlayerType? preferredPlayer,
+  }) {
+    return SourceCoordinatorState(
+      stremioEnabled: stremioEnabled ?? this.stremioEnabled,
+      jellyfinEnabled: jellyfinEnabled ?? this.jellyfinEnabled,
+      stremioGuestMode: stremioGuestMode ?? this.stremioGuestMode,
+      jellyfinGuestMode: jellyfinGuestMode ?? this.jellyfinGuestMode,
+      stremioServerUrl: stremioServerUrl ?? this.stremioServerUrl,
+      preferredPlayer: preferredPlayer ?? this.preferredPlayer,
+    );
+  }
+}
+
+class SourceCoordinatorNotifier extends StateNotifier<SourceCoordinatorState> {
+  static const _keyStremioEnabled = 'valkery_stremio_enabled';
+  static const _keyJellyfinEnabled = 'valkery_jellyfin_enabled';
+  static const _keyStremioGuest = 'valkery_stremio_guest';
+  static const _keyStremioServer = 'valkery_stremio_server_url';
+  static const _keyPlayerType = 'valkery_preferred_player_type';
+
+  SourceCoordinatorNotifier() : super(const SourceCoordinatorState()) {
+    _loadFromPreferences();
+  }
+
+  Future<void> _loadFromPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stremioOn = prefs.getBool(_keyStremioEnabled) ?? true;
+      final jellyfinOn = prefs.getBool(_keyJellyfinEnabled) ?? false;
+      final stremioGuest = prefs.getBool(_keyStremioGuest) ?? true;
+      final serverUrl = prefs.getString(_keyStremioServer) ?? 'http://127.0.0.1:11470';
+      final playerIndex = prefs.getInt(_keyPlayerType) ?? 0;
+
+      state = SourceCoordinatorState(
+        stremioEnabled: stremioOn,
+        jellyfinEnabled: jellyfinOn,
+        stremioGuestMode: stremioGuest,
+        stremioServerUrl: serverUrl,
+        preferredPlayer: ValkeryPlayerType.values[
+          playerIndex.clamp(0, ValkeryPlayerType.values.length - 1)
+        ],
+      );
+    } catch (_) {}
+  }
+
+  Future<void> setStremioEnabled(bool enabled) async {
+    state = state.copyWith(stremioEnabled: enabled);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyStremioEnabled, enabled);
+  }
+
+  Future<void> setJellyfinEnabled(bool enabled) async {
+    state = state.copyWith(jellyfinEnabled: enabled);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyJellyfinEnabled, enabled);
+  }
+
+  Future<void> setStremioGuestMode(bool isGuest) async {
+    state = state.copyWith(stremioGuestMode: isGuest);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyStremioGuest, isGuest);
+  }
+
+  Future<void> setStremioServerUrl(String url) async {
+    final clean = url.trim().replaceAll(RegExp(r'/+$'), '');
+    state = state.copyWith(stremioServerUrl: clean);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyStremioServer, clean);
+  }
+
+  Future<void> setPreferredPlayer(ValkeryPlayerType type) async {
+    state = state.copyWith(preferredPlayer: type);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyPlayerType, type.index);
+  }
+}
+
+final sourceCoordinatorProvider =
+    StateNotifierProvider<SourceCoordinatorNotifier, SourceCoordinatorState>(
+  (ref) => SourceCoordinatorNotifier(),
+);

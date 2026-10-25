@@ -1,5 +1,5 @@
 name: fladder
-description: A simple cross-platform Jellyfin client.
+description: Valkery Media Client - Unified Stremio Engine & Jellyfin/Seerr Client.
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
@@ -28,6 +28,8 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  crypto: ^3.0.6
+  xml: ^6.5.0
   flutter:
     sdk: flutter
   flutter_localizations:
@@ -189,6 +191,8 @@ dependency_overrides:
       path: libs/linux/media_kit_libs_linux
 
 dev_dependencies:
+  crypto: ^3.0.6
+  xml: ^6.5.0
   flutter_test:
     sdk: flutter
 
@@ -219,6 +223,7 @@ flutter:
   generate: true
 
   assets:
+    - assets/icons/
     - icons/
     - assets/fonts/
     - config/

@@ -1,3 +1,5 @@
+import 'package:fladder/providers/source_coordinator_provider.dart';
+import 'package:fladder/screens/stremio/valkery_main_shell.dart';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -75,6 +77,32 @@ class _FladderApp extends ConsumerWidget {
         .select((value) => value.selectedLocale ?? WidgetsBinding.instance.platformDispatcher.locale));
     final scrollBehaviour = const MaterialScrollBehavior();
     final amoledOverwrite = amoledBlack ? Colors.black : null;
+    final coordinator = ref.watch(sourceCoordinatorProvider);
+    if (coordinator.isStremioOnly) {
+      return AdaptiveColor(
+        child: (darkTheme, lightTheme) => ThemesData(
+          light: lightTheme,
+          dark: darkTheme,
+          child: MaterialApp(
+            title: 'Valkery',
+            debugShowCheckedModeBanner: false,
+            theme: lightTheme,
+            darkTheme: darkTheme.copyWith(
+              scaffoldBackgroundColor: amoledOverwrite,
+              cardColor: amoledOverwrite,
+              canvasColor: amoledOverwrite,
+              colorScheme: darkTheme.colorScheme.copyWith(
+                surface: amoledOverwrite,
+                surfaceContainerHighest: amoledOverwrite,
+                surfaceContainerLow: amoledOverwrite,
+              ),
+            ),
+            themeMode: themeMode,
+            home: const ValkeryMainShell(),
+          ),
+        ),
+      );
+    }
 
     return AdaptiveColor(
       child: (darkTheme, lightTheme) => ThemesData(
