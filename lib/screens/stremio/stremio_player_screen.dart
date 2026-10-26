@@ -85,8 +85,6 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       if (_player.platform is NativePlayer) {
         final np = _player.platform as dynamic;
         await np.setProperty('hwdec', 'auto-safe');
-        await np.setProperty('vo', 'gpu-next');
-        await np.setProperty('tone-mapping', 'auto');
         await np.setProperty('demuxer-max-bytes', '256M');
         await np.setProperty('network-timeout', '120');
         await np.setProperty('cache', 'yes');
@@ -180,10 +178,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         },
         child: Stack(
           children: [
-            Center(
+            Positioned.fill(
               child: Video(
                 controller: _controller,
                 controls: NoVideoControls,
+                fit: BoxFit.contain,
               ),
             ),
             if (_isControlsVisible)
@@ -340,6 +339,42 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                     ),
 
                   const Spacer(),
+                  // Buffering indicator
+                  StreamBuilder<bool>(
+                    stream: _player.stream.buffering,
+                    builder: (context, buffSnap) {
+                      final isBuffering = buffSnap.data ?? false;
+                      if (isBuffering && _playbackError == null) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF8B5CF6),
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Cargando búfer...',
+                                style: TextStyle(color: Colors.white, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   // Center Play/Pause & Seek buttons
                   StreamBuilder<bool>(
                     stream: _player.stream.playing,
