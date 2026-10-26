@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iconsax_plus/iconsax_plus.dart';
 
@@ -10,6 +11,7 @@ import '../../models/stremio/stream_candidate.dart';
 import '../../models/stremio/watch_history_item.dart';
 import '../../providers/source_coordinator_provider.dart';
 import '../../providers/stremio_providers.dart';
+import '../../util/external_player_launcher.dart';
 import '../../util/web_image_helper.dart';
 import 'stremio_player_screen.dart';
 import 'valkery_desktop_title_bar.dart';
@@ -520,16 +522,7 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                 final streams = streamsAsync.value;
                 if (streams != null && streams.isNotEmpty) {
                   // Direct play best available stream
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => StremioPlayerScreen(
-                        media: media,
-                        stream: streams.first,
-                        season: isSeries ? _selectedSeason : null,
-                        episode: isSeries ? _selectedEpisode : null,
-                      ),
-                    ),
-                  );
+                  _handlePlayStream(streams.first, media);
                 } else {
                   // Scroll down to streams section
                   _scrollToStreams();
@@ -1306,37 +1299,45 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                         ),
                       ),
                     ),
-                    // Web compatibility badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: stream.isWebCompatible
-                            ? Colors.green.withValues(alpha: 0.22)
-                            : Colors.orange.withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: stream.isWebCompatible ? Colors.greenAccent : Colors.orangeAccent,
-                          width: 0.7,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            stream.isWebCompatible ? Icons.check_circle_outline : Icons.open_in_new,
-                            size: 10,
+                    // Web compatibility / VLC badge (clickable to launch external player directly)
+                    InkWell(
+                      borderRadius: BorderRadius.circular(4),
+                      onTap: () async {
+                        final serverUrl = coordinator.stremioServerUrl;
+                        final streamUrl = stream.playbackUrlFor(serverUrl);
+                        await ExternalPlayerLauncher.openInVlc(streamUrl);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: stream.isWebCompatible
+                              ? Colors.green.withValues(alpha: 0.22)
+                              : Colors.orange.withValues(alpha: 0.22),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
                             color: stream.isWebCompatible ? Colors.greenAccent : Colors.orangeAccent,
+                            width: 0.7,
                           ),
-                          const SizedBox(width: 3),
-                          Text(
-                            stream.isWebCompatible ? 'Web Ready' : 'VLC / Ext',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              stream.isWebCompatible ? Icons.check_circle_outline : Icons.open_in_new,
+                              size: 10,
                               color: stream.isWebCompatible ? Colors.greenAccent : Colors.orangeAccent,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 3),
+                            Text(
+                              stream.isWebCompatible ? 'Web Ready' : 'VLC / Ext',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: stream.isWebCompatible ? Colors.greenAccent : Colors.orangeAccent,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     // Seeders
@@ -1412,20 +1413,96 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
             ),
             icon: const Icon(IconsaxPlusBold.play, size: 16),
             label: const Text('Ver'),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => StremioPlayerScreen(
-                    media: media,
-                    stream: stream,
-                    season: _isSeries ? _selectedSeason : null,
-                    episode: _isSeries ? _selectedEpisode : null,
+            onPressed: () => _handlePlayStream(stream, media),
+          ),
+          const SizedBox(width: 4),
+          // Stream Options Menu (External Player / Copy Link)
+          PopupMenuButton<String>(
+            tooltip: 'Opciones de reproducción',
+            icon: const Icon(Icons.more_vert, color: Colors.white70, size: 20),
+            color: const Color(0xFF1E1B2E),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: Colors.white12),
+            ),
+            onSelected: (val) async {
+              final serverUrl = coordinator.stremioServerUrl;
+              final streamUrl = stream.playbackUrlFor(serverUrl);
+              if (val == 'internal') {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => StremioPlayerScreen(
+                      media: media,
+                      stream: stream,
+                      season: _isSeries ? _selectedSeason : null,
+                      episode: _isSeries ? _selectedEpisode : null,
+                    ),
                   ),
-                ),
-              );
+                );
+              } else if (val == 'vlc') {
+                await ExternalPlayerLauncher.openInVlc(streamUrl);
+              } else if (val == 'copy') {
+                await Clipboard.setData(ClipboardData(text: streamUrl));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Enlace copiado al portapapeles')),
+                  );
+                }
+              }
             },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'internal',
+                child: Row(
+                  children: [
+                    Icon(IconsaxPlusBold.play, size: 16, color: Color(0xFF8B5CF6)),
+                    SizedBox(width: 10),
+                    Text('Reproductor Valkery', style: TextStyle(color: Colors.white, fontSize: 13)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'vlc',
+                child: Row(
+                  children: [
+                    Icon(Icons.open_in_new, size: 16, color: Colors.orangeAccent),
+                    SizedBox(width: 10),
+                    Text('Abrir en VLC', style: TextStyle(color: Colors.white, fontSize: 13)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'copy',
+                child: Row(
+                  children: [
+                    Icon(Icons.copy, size: 16, color: Colors.white70),
+                    SizedBox(width: 10),
+                    Text('Copiar enlace directo', style: TextStyle(color: Colors.white, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _handlePlayStream(StreamCandidate stream, MediaItem media) {
+    final coordinator = ref.read(sourceCoordinatorProvider);
+    if (coordinator.preferredPlayer == ValkeryPlayerType.vlcExternal) {
+      final streamUrl = stream.playbackUrlFor(coordinator.stremioServerUrl);
+      ExternalPlayerLauncher.openInVlc(streamUrl);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StremioPlayerScreen(
+          media: media,
+          stream: stream,
+          season: _isSeries ? _selectedSeason : null,
+          episode: _isSeries ? _selectedEpisode : null,
+        ),
       ),
     );
   }

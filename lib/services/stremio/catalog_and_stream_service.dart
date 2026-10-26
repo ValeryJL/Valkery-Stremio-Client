@@ -397,9 +397,11 @@ class CatalogAndStreamService {
     }
 
     final extraTrackers = <String>[];
+    final rawSources = <String>[];
     if (raw['sources'] is List) {
       for (final s in raw['sources'] as List<dynamic>) {
         final str = s.toString();
+        rawSources.add(str);
         if (str.startsWith('tracker:')) {
           extraTrackers.add(str.substring('tracker:'.length));
         }
@@ -431,6 +433,7 @@ class CatalogAndStreamService {
       sourceTracker: tracker,
       languages: _detectLanguages(combined),
       addonName: addonName,
+      sources: rawSources,
       behaviorHints: behaviorHints,
     );
   }

@@ -13,7 +13,18 @@ class StreamCandidate {
   final String sourceTracker;
   final List<String> languages;
   final String addonName;
+  final List<String> sources;
   final Map<String, dynamic> behaviorHints;
+
+  static const List<String> defaultTrackers = [
+    'udp://tracker.opentrackr.org:1337/announce',
+    'udp://open.stealth.si:80/announce',
+    'udp://tracker.torrent.eu.org:451/announce',
+    'udp://open.demonii.com:1337/announce',
+    'udp://exodus.desync.com:6969/announce',
+    'udp://explodie.org:6969/announce',
+    'http://tracker.openbittorrent.com:80/announce',
+  ];
 
   const StreamCandidate({
     required this.title,
@@ -28,6 +39,7 @@ class StreamCandidate {
     this.sourceTracker = 'DHT',
     this.languages = const [],
     this.addonName = 'Torrentio',
+    this.sources = const [],
     this.behaviorHints = const {},
   });
 
@@ -35,18 +47,71 @@ class StreamCandidate {
   bool get isDirectHttp => url.startsWith('http://') || url.startsWith('https://');
 
   /// Resolves the stream playback URL dynamically against a specified Stremio streaming server.
+  /// If fileIdx is not specified, passes -1 so rivulet-engine automatically picks the largest video file.
+  /// Also transmits all trackers (tr) and filename filter (f) as query parameters for instant swarm bootstrapping.
   String playbackUrlFor(String serverBaseUrl) {
     if (url.isNotEmpty) return url;
     if (infoHash.isEmpty) return '';
     final base = serverBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
-    return '$base/$infoHash/${fileIdx ?? 0}';
+    final targetIdx = fileIdx ?? -1;
+
+    final queryParts = <String>[];
+    final trList = <String>[];
+
+    for (final s in sources) {
+      if (s.startsWith('tracker:')) {
+        trList.add(s.substring('tracker:'.length));
+      } else if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('udp://')) {
+        trList.add(s);
+      }
+    }
+    for (final defTr in defaultTrackers) {
+      if (!trList.contains(defTr)) {
+        trList.add(defTr);
+      }
+    }
+
+    for (final tr in trList) {
+      queryParts.add('tr=${Uri.encodeQueryComponent(tr)}');
+    }
+
+    final filename = behaviorHints['filename'];
+    if (filename != null && filename.toString().trim().isNotEmpty) {
+      queryParts.add('f=${Uri.encodeQueryComponent(filename.toString().trim())}');
+    }
+
+    final qs = queryParts.isNotEmpty ? '?${queryParts.join('&')}' : '';
+    return '$base/$infoHash/$targetIdx$qs';
   }
 
   /// Resolves the built-in HLS transcode URL dynamically against a specified Stremio streaming server.
   String hlsPlaybackUrlFor(String serverBaseUrl) {
     if (infoHash.isEmpty) return playbackUrlFor(serverBaseUrl);
     final base = serverBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
-    return '$base/$infoHash/${fileIdx ?? 0}/hls.m3u8';
+    final targetIdx = fileIdx ?? -1;
+
+    final queryParts = <String>[];
+    final trList = <String>[];
+
+    for (final s in sources) {
+      if (s.startsWith('tracker:')) {
+        trList.add(s.substring('tracker:'.length));
+      } else if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('udp://')) {
+        trList.add(s);
+      }
+    }
+    for (final defTr in defaultTrackers) {
+      if (!trList.contains(defTr)) {
+        trList.add(defTr);
+      }
+    }
+
+    for (final tr in trList) {
+      queryParts.add('tr=${Uri.encodeQueryComponent(tr)}');
+    }
+
+    final qs = queryParts.isNotEmpty ? '?${queryParts.join('&')}' : '';
+    return '$base/$infoHash/$targetIdx/hls.m3u8$qs';
   }
 
   String get playbackUrl {
@@ -101,6 +166,7 @@ class StreamCandidate {
     String? sourceTracker,
     List<String>? languages,
     String? addonName,
+    List<String>? sources,
     Map<String, dynamic>? behaviorHints,
   }) {
     return StreamCandidate(
@@ -116,6 +182,7 @@ class StreamCandidate {
       sourceTracker: sourceTracker ?? this.sourceTracker,
       languages: languages ?? this.languages,
       addonName: addonName ?? this.addonName,
+      sources: sources ?? this.sources,
       behaviorHints: behaviorHints ?? this.behaviorHints,
     );
   }
@@ -134,12 +201,14 @@ class StreamCandidate {
       'sourceTracker': sourceTracker,
       'languages': languages,
       'addonName': addonName,
+      'sources': sources,
       'behaviorHints': behaviorHints,
     };
   }
 
   factory StreamCandidate.fromJson(Map<String, dynamic> json) {
     final rawLangs = json['languages'] as List<dynamic>? ?? const [];
+    final rawSources = json['sources'] as List<dynamic>? ?? const [];
     final hints = json['behaviorHints'] is Map<String, dynamic>
         ? json['behaviorHints'] as Map<String, dynamic>
         : const <String, dynamic>{};
@@ -159,6 +228,7 @@ class StreamCandidate {
       sourceTracker: (json['sourceTracker'] ?? 'Torrentio').toString(),
       languages: rawLangs.map((e) => e.toString()).toList(),
       addonName: (json['addonName'] ?? 'Torrentio').toString(),
+      sources: rawSources.map((e) => e.toString()).toList(),
       behaviorHints: hints,
     );
   }

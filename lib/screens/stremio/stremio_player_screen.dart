@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:iconsax_plus/iconsax_plus.dart';
 import 'package:media_kit/media_kit.dart' as mpv;
 import 'package:media_kit_video/media_kit_video.dart';
@@ -52,6 +54,14 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   bool _isControlsVisible = true;
   String? _playbackError;
   bool _isRetrying = false;
+  bool _isInitialLoading = true;
+  Timer? _torrentStatsTimer;
+  int _torrentPeers = 0;
+  int _torrentDownloadSpeed = 0;
+  int _torrentDownloadedBytes = 0;
+  StreamSubscription<Duration>? _durationSubscription;
+  StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription? _logSubscription;
 
   // Video Fit
   BoxFit _videoFit = BoxFit.contain;
@@ -103,8 +113,30 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       if (mounted) {
         setState(() {
           _playbackError = err;
+          _isInitialLoading = false;
           _isControlsVisible = true;
         });
+        _torrentStatsTimer?.cancel();
+      }
+    });
+
+    _durationSubscription = _player.stream.duration.listen((dur) {
+      if (dur > Duration.zero && mounted && _isInitialLoading) {
+        setState(() => _isInitialLoading = false);
+        _torrentStatsTimer?.cancel();
+      }
+    });
+
+    _positionSubscription = _player.stream.position.listen((pos) {
+      if (pos > Duration.zero && mounted && _isInitialLoading) {
+        setState(() => _isInitialLoading = false);
+        _torrentStatsTimer?.cancel();
+      }
+    });
+
+    _logSubscription = _player.stream.log.listen((event) {
+      if (kDebugMode) {
+        debugPrint('[ValkeryPlayer/mpv] [${event.level}] ${event.text}');
       }
     });
 
@@ -159,15 +191,20 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     setState(() {
       _playbackError = null;
       _isRetrying = false;
+      _isInitialLoading = true;
     });
+
+    _startTorrentStatsTimer();
 
     try {
       if (_player.platform is mpv.NativePlayer) {
         final np = _player.platform as dynamic;
         await np.setProperty('hwdec', 'auto-safe');
         await np.setProperty('demuxer-max-bytes', '256M');
+        await np.setProperty('demuxer-readahead-secs', '30');
         await np.setProperty('network-timeout', '120');
         await np.setProperty('cache', 'yes');
+        await np.setProperty('stream-lavf-o', 'reconnect_streamed=1,reconnect_delay_max=5');
       }
     } catch (_) {}
 
@@ -177,7 +214,49 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
             ? widget.stream.hlsPlaybackUrlFor(serverUrl)
             : widget.stream.playbackUrlFor(serverUrl));
 
+    if (kDebugMode) {
+      debugPrint('[ValkeryPlayer] Opening stream: $url');
+    }
+
     await _player.open(mpv.Media(url));
+  }
+
+  void _startTorrentStatsTimer() {
+    _torrentStatsTimer?.cancel();
+    if (!widget.stream.isTorrent || widget.stream.infoHash.isEmpty) return;
+
+    _torrentStatsTimer = Timer.periodic(const Duration(milliseconds: 900), (_) async {
+      if (!mounted || !_isInitialLoading) {
+        _torrentStatsTimer?.cancel();
+        return;
+      }
+      try {
+        final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
+        final res = await http.get(Uri.parse('$serverUrl/stats.json')).timeout(const Duration(seconds: 2));
+        if (res.statusCode == 200 && mounted) {
+          final decoded = jsonDecode(res.body);
+          if (decoded is Map<String, dynamic>) {
+            final ihData = decoded[widget.stream.infoHash.toLowerCase()];
+            if (ihData is Map<String, dynamic>) {
+              setState(() {
+                _torrentPeers = int.tryParse(ihData['peers']?.toString() ?? '0') ?? 0;
+                _torrentDownloadSpeed = int.tryParse(ihData['downloadSpeed']?.toString() ?? '0') ?? 0;
+                _torrentDownloadedBytes = int.tryParse(ihData['downloaded']?.toString() ?? '0') ?? 0;
+              });
+            }
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
+  String _formatSpeed(int bytesPerSec) {
+    if (bytesPerSec <= 0) return '0 KB/s';
+    final kb = bytesPerSec / 1024.0;
+    if (kb >= 1024.0) {
+      return '${(kb / 1024.0).toStringAsFixed(1)} MB/s';
+    }
+    return '${kb.toStringAsFixed(0)} KB/s';
   }
 
   Future<void> _loadExternalSubtitles() async {
@@ -392,6 +471,10 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _hideControlsTimer?.cancel();
     _progressSyncTimer?.cancel();
     _indicatorTimer?.cancel();
+    _torrentStatsTimer?.cancel();
+    _durationSubscription?.cancel();
+    _positionSubscription?.cancel();
+    _logSubscription?.cancel();
     _errorSubscription?.cancel();
     _tracksSubscription?.cancel();
     _playingSubscription?.cancel();
@@ -446,6 +529,108 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                     fit: _videoFit,
                   ),
                 ),
+
+                // Center Initial Loading Overlay with Live Torrent/Stream Metrics
+                if (_isInitialLoading && _playbackError == null)
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.88),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black87,
+                            blurRadius: 32,
+                            spreadRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 44,
+                            height: 44,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3.5,
+                              color: Color(0xFF8B5CF6),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Text(
+                            widget.media.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              widget.stream.quality,
+                              style: const TextStyle(
+                                color: Color(0xFFC4B5FD),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            widget.stream.isTorrent
+                                ? (_torrentPeers > 0
+                                    ? '$_torrentPeers pares activos • ${_formatSpeed(_torrentDownloadSpeed)}'
+                                    : 'Conectando al enjambre de torrents y rastreadores...')
+                                : 'Cargando búfer de video...',
+                            style: TextStyle(
+                              color: widget.stream.isTorrent && _torrentPeers > 0
+                                  ? Colors.greenAccent
+                                  : Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (widget.stream.isTorrent && _torrentDownloadedBytes > 0) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              '${(_torrentDownloadedBytes / (1024 * 1024)).toStringAsFixed(1)} MB en caché inicial',
+                              style: const TextStyle(color: Colors.white54, fontSize: 11),
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.orangeAccent,
+                              side: const BorderSide(color: Colors.orangeAccent),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            ),
+                            icon: const Icon(Icons.open_in_new, size: 16),
+                            label: const Text('Abrir directamente en VLC'),
+                            onPressed: () async {
+                              final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
+                              final streamUrl = widget.localFilePath ?? widget.stream.playbackUrlFor(serverUrl);
+                              await ExternalPlayerLauncher.openInVlc(streamUrl);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                 // Center temporary seek/volume/rate badge
                 if (_temporaryIndicatorText != null)
