@@ -57,11 +57,11 @@ jobs:
       - name: Build Release APK
         run: |
           flutter pub get
-          flutter build apk --release
+          flutter build apk --release --flavor production --android-skip-build-dependency-validation
       - uses: actions/upload-artifact@v4
         with:
           name: Valkery-Stremio-Client-Android-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/*-release.apk
 
   build-linux:
     name: Build Linux Desktop x64
@@ -71,7 +71,7 @@ jobs:
       - name: Install Linux GTK build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libasound2-dev libmpv-dev libsecret-1-dev
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
@@ -98,7 +98,7 @@ jobs:
       - name: Build macOS Release
         run: |
           flutter pub get
-          flutter build macos --release
+          flutter build macos --release --flavor production
           cd build/macos/Build/Products/Release
           zip -r ../../../../../Valkery-Stremio-Client-macOS.zip valkery_stremio_client.app
       - uses: actions/upload-artifact@v4
