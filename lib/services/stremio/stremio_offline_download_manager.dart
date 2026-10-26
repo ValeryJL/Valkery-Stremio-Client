@@ -176,17 +176,22 @@ class StremioOfflineDownloadManager {
   Future<OfflineMediaEntry> startDownload({
     required MediaItem media,
     required StreamCandidate stream,
+    String? serverUrl,
     int? season,
     int? episode,
     List<SubtitleTrack>? subtitles,
   }) async {
+    final effectiveStreamUrl = serverUrl != null && serverUrl.isNotEmpty
+        ? stream.playbackUrlFor(serverUrl)
+        : stream.playbackUrl;
+
     if (kIsWeb) {
-      await downloadFile(stream.playbackUrl);
+      await downloadFile(effectiveStreamUrl);
       return OfflineMediaEntry(
         id: media.id,
         title: media.name,
         type: media.type,
-        localVideoPath: stream.playbackUrl,
+        localVideoPath: effectiveStreamUrl,
         status: OfflineItemStatus.completed,
         createdAt: DateTime.now(),
       );
@@ -205,7 +210,7 @@ class StremioOfflineDownloadManager {
       await mediaFolder.create(recursive: true);
     }
 
-    final videoExt = _inferVideoExtension(stream.playbackUrl);
+    final videoExt = _inferVideoExtension(effectiveStreamUrl);
     final videoPath = p.join(mediaFolder.path, 'video$videoExt');
 
     var entry = OfflineMediaEntry(
@@ -248,7 +253,7 @@ class StremioOfflineDownloadManager {
 
     // 3. Stream video file chunks
     _downloadVideoStream(
-      streamUrl: stream.playbackUrl,
+      streamUrl: effectiveStreamUrl,
       savePath: videoPath,
       entryId: entryId,
     );

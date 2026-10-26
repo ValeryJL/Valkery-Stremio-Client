@@ -18,6 +18,7 @@ import '../../models/stremio/watch_history_item.dart';
 import '../../providers/stremio_providers.dart';
 import '../../util/external_player_launcher.dart';
 import 'valkery_desktop_title_bar.dart';
+import '../../providers/source_coordinator_provider.dart';
 
 class StremioPlayerScreen extends ConsumerStatefulWidget {
   final stremio_model.MediaItem media;
@@ -137,10 +138,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       }
     } catch (_) {}
 
+    final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
     final url = widget.localFilePath ??
         ((kIsWeb && !widget.stream.isWebCompatible && widget.stream.isTorrent)
-            ? widget.stream.hlsPlaybackUrl
-            : widget.stream.playbackUrl);
+            ? widget.stream.hlsPlaybackUrlFor(serverUrl)
+            : widget.stream.playbackUrlFor(serverUrl));
 
     await _player.open(mpv.Media(url));
   }
@@ -492,7 +494,8 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   }
 
   Widget _buildControlsOverlay(bool isDesktopPlatform) {
-    final streamUrl = widget.localFilePath ?? widget.stream.playbackUrl;
+    final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
+    final streamUrl = widget.localFilePath ?? widget.stream.playbackUrlFor(serverUrl);
 
     return Column(
       children: [
@@ -1183,7 +1186,8 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
   void _showPlayerOptionsSheet() {
     _showControls();
-    final streamUrl = widget.localFilePath ?? widget.stream.playbackUrl;
+    final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
+    final streamUrl = widget.localFilePath ?? widget.stream.playbackUrlFor(serverUrl);
 
     showModalBottomSheet(
       context: context,

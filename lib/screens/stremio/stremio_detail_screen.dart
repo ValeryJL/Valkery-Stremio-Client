@@ -1377,9 +1377,11 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
             icon: const Icon(IconsaxPlusLinear.document_download, color: Colors.white70),
             onPressed: () async {
               try {
+                final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
                 await ref.read(stremioOfflineDownloadManagerProvider).startDownload(
                   media: media,
                   stream: stream,
+                  serverUrl: serverUrl,
                   season: _isSeries ? _selectedSeason : null,
                   episode: _isSeries ? _selectedEpisode : null,
                 );

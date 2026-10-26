@@ -33,18 +33,31 @@ class StreamCandidate {
 
   bool get isTorrent => infoHash.isNotEmpty || magnetUri.startsWith('magnet:');
   bool get isDirectHttp => url.startsWith('http://') || url.startsWith('https://');
-  String get playbackUrl {
+
+  /// Resolves the stream playback URL dynamically against a specified Stremio streaming server.
+  String playbackUrlFor(String serverBaseUrl) {
     if (url.isNotEmpty) return url;
     if (infoHash.isEmpty) return '';
+    final base = serverBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    return '$base/$infoHash/${fileIdx ?? 0}';
+  }
+
+  /// Resolves the built-in HLS transcode URL dynamically against a specified Stremio streaming server.
+  String hlsPlaybackUrlFor(String serverBaseUrl) {
+    if (infoHash.isEmpty) return playbackUrlFor(serverBaseUrl);
+    final base = serverBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    return '$base/$infoHash/${fileIdx ?? 0}/hls.m3u8';
+  }
+
+  String get playbackUrl {
     final host = kIsWeb ? (Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1') : '127.0.0.1';
-    return 'http://$host:11470/$infoHash/${fileIdx ?? 0}';
+    return playbackUrlFor('http://$host:11470');
   }
 
   /// Built-in Stremio Engine HLS transcode URL (converts MKV/HEVC to browser HLS on-the-fly)
   String get hlsPlaybackUrl {
-    if (infoHash.isEmpty) return playbackUrl;
     final host = kIsWeb ? (Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1') : '127.0.0.1';
-    return 'http://$host:11470/$infoHash/${fileIdx ?? 0}/hls.m3u8';
+    return hlsPlaybackUrlFor('http://$host:11470');
   }
 
   /// Determines if this stream format is likely natively playable in a standard web browser without external player.

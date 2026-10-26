@@ -66,6 +66,14 @@ void main() {
         torrent.playbackUrl,
         equals('http://127.0.0.1:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/0'),
       );
+      expect(
+        torrent.playbackUrlFor('http://example.com:11470/'),
+        equals('http://example.com:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/0'),
+      );
+      expect(
+        torrent.hlsPlaybackUrlFor('http://example.com:11470'),
+        equals('http://example.com:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/0/hls.m3u8'),
+      );
     });
 
     test('MediaItem model parses and provides releaseInfo fallback', () {
