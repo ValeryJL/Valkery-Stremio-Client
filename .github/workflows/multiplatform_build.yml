@@ -141,7 +141,7 @@ jobs:
           chmod +x ./scripts/fetch_streaming_engine.sh
           ./scripts/fetch_streaming_engine.sh macos
           cd build/macos/Build/Products/Release-production
-          zip -r ../../../../../Valkery-Stremio-Client-macOS.zip Fladder.app
+          zip -r ../../../../../Valkery-Stremio-Client-macOS.zip *.app
       - uses: actions/upload-artifact@v4
         with:
           name: Valkery-Stremio-Client-macOS

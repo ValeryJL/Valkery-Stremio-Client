@@ -512,7 +512,7 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                               Text(addon.name,
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                               Text(
-                                'v${addon.version} • ${addon.catalogs.length} catálogos',
+                                'v${addon.version} • ${addon.resources.length} recursos',
                                 style: const TextStyle(fontSize: 11, color: Colors.white54),
                               ),
                             ],

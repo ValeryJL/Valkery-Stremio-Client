@@ -48,7 +48,12 @@ fi
 
 if [ "$PLATFORM" = "macos" ] || [ "$PLATFORM" = "all" ]; then
     echo "--- Bundling macOS Universal/ARM64 ---"
-    fetch_tar_binary "Darwin_arm64\.tar\.gz" "build/macos/Build/Products/Release-production/Fladder.app/Contents/MacOS/stream-server"
+    APP_DIR=$(ls -d build/macos/Build/Products/Release-production/*.app 2>/dev/null | head -n1 || echo "")
+    if [ -n "$APP_DIR" ]; then
+        fetch_tar_binary "Darwin_arm64\.tar\.gz" "$APP_DIR/Contents/MacOS/stream-server"
+    else
+        fetch_tar_binary "Darwin_arm64\.tar\.gz" "build/macos/Build/Products/Release-production/Valkery.app/Contents/MacOS/stream-server"
+    fi
 fi
 
 if [ "$PLATFORM" = "docker" ]; then
