@@ -26,6 +26,7 @@ jobs:
       - name: Build Windows Release
         run: |
           flutter build windows --release
+          powershell -ExecutionPolicy Bypass -File ./scripts/fetch_streaming_engine.ps1 -TargetDir build/windows/x64/runner/Release
           Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath Valkery-Stremio-Client-Windows-x64.zip
       - name: Compile Inno Setup installer
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
@@ -54,6 +55,10 @@ jobs:
         with:
           channel: 'stable'
           cache: true
+      - name: Bundle Android Native Streaming Engine
+        run: |
+          chmod +x ./scripts/fetch_streaming_engine.sh
+          ./scripts/fetch_streaming_engine.sh android
       - name: Build Release APK
         run: |
           flutter pub get
@@ -80,6 +85,8 @@ jobs:
         run: |
           flutter pub get
           flutter build linux --release
+          chmod +x ./scripts/fetch_streaming_engine.sh
+          ./scripts/fetch_streaming_engine.sh linux
           tar -czvf Valkery-Stremio-Client-Linux-x64.tar.gz -C build/linux/x64/release/bundle .
       - uses: actions/upload-artifact@v4
         with:
@@ -99,6 +106,8 @@ jobs:
         run: |
           flutter pub get
           flutter build macos --release --flavor production
+          chmod +x ./scripts/fetch_streaming_engine.sh
+          ./scripts/fetch_streaming_engine.sh macos
           cd build/macos/Build/Products/Release-production
           zip -r ../../../../../Valkery-Stremio-Client-macOS.zip Fladder.app
       - uses: actions/upload-artifact@v4

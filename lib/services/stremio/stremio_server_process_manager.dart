@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 enum StremioServerState {
@@ -34,6 +35,8 @@ class StremioServerStatus {
 /// of the official Stremio Streaming Server (default: http://127.0.0.1:11470).
 class StremioServerProcessManager {
   static const String defaultServerUrl = 'http://127.0.0.1:11470';
+  static const MethodChannel _androidChannel =
+      MethodChannel('nl.jknaapen.fladder/stremio_daemon');
 
   final http.Client _httpClient;
   String _serverUrl;
@@ -150,6 +153,28 @@ class StremioServerProcessManager {
       ),
     );
 
+    // On Android, manage daemon lifecycle via native Foreground/Service channel
+    if (Platform.isAndroid) {
+      try {
+        await _androidChannel.invokeMethod('startDaemon');
+        for (var i = 0; i < 6; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+          final health = await checkHealth();
+          if (health.isOnline) return true;
+        }
+      } catch (e) {
+        _safeNotifyStatus(
+          StremioServerStatus(
+            state: StremioServerState.error,
+            serverUrl: _serverUrl,
+            errorMessage: 'Error al iniciar motor en Android: $e',
+          ),
+        );
+        return false;
+      }
+      return false;
+    }
+
     final exePath = executableOverride ?? _detectInstalledStremioExecutable();
     if (exePath == null) {
       _safeNotifyStatus(
@@ -168,7 +193,10 @@ class StremioServerProcessManager {
       final serverJs = File('$exeDir${Platform.pathSeparator}server.js');
 
       List<String> args;
-      if (serverJs.existsSync()) {
+      final exeLower = exeFile.path.toLowerCase();
+      if (exeLower.contains('stream-server') || exeLower.contains('rivulet')) {
+        args = ['-p', '11470'];
+      } else if (serverJs.existsSync()) {
         args = [serverJs.path];
       } else {
         args = ['--port=11470'];
@@ -199,11 +227,17 @@ class StremioServerProcessManager {
   }
 
   /// Locates standard installation paths for Stremio headless server / runtime.
-  /// NOTE: We deliberately EXCLUDE `stremio.exe` because that launches the Qt desktop GUI.
+  /// First checks embedded app bundle, then host installation paths.
   static String? _detectInstalledStremioExecutable() {
     if (kIsWeb) return null;
 
+    final appDir = File(Platform.resolvedExecutable).parent.path;
+
     if (Platform.isWindows) {
+      // 1. Embedded stream-server.exe bundled with Valkery
+      final embedded = '$appDir\\stream-server.exe';
+      if (File(embedded).existsSync()) return embedded;
+
       final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
       final programFiles = Platform.environment['ProgramFiles'] ?? '';
       final candidates = [
@@ -220,6 +254,10 @@ class StremioServerProcessManager {
         if (File(p).existsSync()) return p;
       }
     } else if (Platform.isLinux) {
+      // 1. Embedded stream-server bundled with Valkery
+      final embedded = '$appDir/stream-server';
+      if (File(embedded).existsSync()) return embedded;
+
       final candidates = [
         '/usr/bin/stremio-service',
         '/usr/bin/stremio-runtime',
@@ -230,6 +268,10 @@ class StremioServerProcessManager {
         if (File(p).existsSync()) return p;
       }
     } else if (Platform.isMacOS) {
+      // 1. Embedded stream-server bundled with Valkery macOS bundle
+      final embedded = '$appDir/stream-server';
+      if (File(embedded).existsSync()) return embedded;
+
       final candidates = [
         '/Applications/Stremio.app/Contents/MacOS/stremio-runtime',
         '/Applications/Stremio.app/Contents/MacOS/stremio-service',
@@ -245,6 +287,12 @@ class StremioServerProcessManager {
   Future<void> dispose() async {
     _healthCheckTimer?.cancel();
     _healthCheckTimer = null;
+
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        await _androidChannel.invokeMethod('stopDaemon');
+      } catch (_) {}
+    }
 
     final proc = _serverProcess;
     _serverProcess = null;

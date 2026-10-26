@@ -9,8 +9,6 @@ echo "=========================================================="
 # Stremio environment defaults
 export FFMPEG_BIN="${FFMPEG_BIN:-/usr/bin/ffmpeg}"
 export FFPROBE_BIN="${FFPROBE_BIN:-/usr/bin/ffprobe}"
-export NO_CORS="${NO_CORS:-1}"
-export CASTING_DISABLED="${CASTING_DISABLED:-1}"
 export APP_PATH="${APP_PATH:-/root/.stremio-server}"
 
 mkdir -p "$APP_PATH"
@@ -32,13 +30,13 @@ if [ -f "/usr/share/nginx/html/index.html" ]; then
   sed -i "s|<base href=\"[^\"]*\">|<base href=\"$WEBPATH\">|g" /usr/share/nginx/html/index.html
 fi
 
-# Start Stremio Streaming Server in background with keepalive loop
-echo "[Valkery] Launching Stremio Streaming Server daemon (server.js)..."
+# Start Native Streaming Server in background with keepalive loop
+echo "[Valkery] Launching Native Streaming Server daemon..."
 (
   cd /stremio
   while true; do
-    node server.js
-    echo "[Valkery] Stremio server stopped, restarting in 1s..."
+    ./stream-server -p 11470
+    echo "[Valkery] Streaming server stopped, restarting in 1s..."
     sleep 1
   done
 ) &

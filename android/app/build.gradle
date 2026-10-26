@@ -44,6 +44,7 @@ android {
                     "lib/armeabi-v7a/libass.so",
                     "lib/x86/libass.so",
             ]
+            keepDebugSymbols += ["**/libstreamserver.so"]
         }
     }
     namespace = "nl.jknaapen.fladder"

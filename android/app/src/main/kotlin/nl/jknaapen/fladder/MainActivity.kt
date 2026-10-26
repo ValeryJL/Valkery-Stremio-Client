@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 import nl.jknaapen.fladder.objects.PlayerSettingsObject
 import nl.jknaapen.fladder.objects.TranslationsMessenger
 import nl.jknaapen.fladder.objects.VideoPlayerObject
@@ -38,6 +39,7 @@ class WallpaperFileProvider : FileProvider()
 class MainActivity : AudioServiceFragmentActivity(), NativeVideoActivity {
     private lateinit var videoPlayerLauncher: ActivityResultLauncher<Intent>
     private var videoPlayerCallback: ((Result<StartResult>) -> Unit)? = null
+    private var daemonProcess: Process? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -90,6 +92,27 @@ class MainActivity : AudioServiceFragmentActivity(), NativeVideoActivity {
             }
         )
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "nl.jknaapen.fladder/stremio_daemon")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "startDaemon" -> {
+                        startStremioDaemon()
+                        result.success(true)
+                    }
+                    "stopDaemon" -> {
+                        stopStremioDaemon()
+                        result.success(true)
+                    }
+                    "isDaemonRunning" -> {
+                        result.success(daemonProcess != null && daemonProcess?.isAlive == true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // Auto-start embedded streaming engine daemon on Android
+        startStremioDaemon()
+
         videoPlayerLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
@@ -106,6 +129,39 @@ class MainActivity : AudioServiceFragmentActivity(), NativeVideoActivity {
             VideoPlayerObject.implementation.player?.release()
             callback?.invoke(Result.success(startResult))
         }
+    }
+
+    private fun startStremioDaemon() {
+        if (daemonProcess != null && daemonProcess?.isAlive == true) {
+            return
+        }
+        try {
+            val nativeLibDir = applicationInfo.nativeLibraryDir
+            val binary = File(nativeLibDir, "libstreamserver.so")
+            if (binary.exists()) {
+                binary.setExecutable(true, false)
+                val pb = ProcessBuilder(binary.absolutePath, "-p", "11470")
+                pb.directory(filesDir)
+                daemonProcess = pb.start()
+                Log.i("Valkery", "Stremio daemon started from ${binary.absolutePath} on port 11470")
+            } else {
+                Log.w("Valkery", "Streaming daemon binary not found at ${binary.absolutePath}")
+            }
+        } catch (e: Exception) {
+            Log.e("Valkery", "Failed to start streaming daemon", e)
+        }
+    }
+
+    private fun stopStremioDaemon() {
+        try {
+            daemonProcess?.destroy()
+        } catch (_: Exception) {}
+        daemonProcess = null
+    }
+
+    override fun onDestroy() {
+        stopStremioDaemon()
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

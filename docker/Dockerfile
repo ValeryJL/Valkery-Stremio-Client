@@ -1,6 +1,6 @@
 # ==========================================
 # Valkery Stremio Client - Web Server Dockerfile
-# Integrated Flutter Web + Stremio Streaming Server Daemon
+# Integrated Flutter Web + Native Stremio Streaming Server Daemon
 # ==========================================
 
 # Stage 1: Build Flutter Web App
@@ -21,15 +21,18 @@ COPY . .
 # Build Flutter Web optimized with CanvasKit / HTML5
 RUN flutter build web --release
 
-# Stage 2: Serve with Nginx + Stremio Streaming Server (Node.js + FFmpeg)
+# Stage 2: Serve with Nginx + Embedded Native Streaming Engine (Rivulet / Stremio Go)
 FROM nginx:alpine
 
-# Install Node.js, FFmpeg, Coreutils (for GNU df), and required tools for Stremio Streaming Server
-RUN apk add --no-cache nodejs ffmpeg wget ca-certificates coreutils
+# Install FFmpeg, Coreutils, curl, tar, and required tools for streaming
+RUN apk add --no-cache ffmpeg wget ca-certificates curl tar coreutils
 
-# Copy Stremio Server runtime
+# Download and install latest native Streaming Server engine
 WORKDIR /stremio
-COPY --from=stremio/server:latest /stremio/server.js /stremio/server.js
+RUN RELEASE_URL=$(curl -sSL "https://api.github.com/repos/M0Rf30/stremio-server-go/releases/latest" | grep -o 'https://[^"]*Linux_x86_64\.tar\.gz' | head -n1) && \
+    curl -sSL "$RELEASE_URL" | tar -xz -C /stremio && \
+    mv /stremio/rivulet-engine /stremio/stream-server && \
+    chmod +x /stremio/stream-server
 
 # Copy built web artifacts
 COPY --from=build /app/build/web /usr/share/nginx/html
@@ -41,11 +44,9 @@ COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Environment variables for Stremio Streaming Server
+# Environment variables for Streaming Server
 ENV FFMPEG_BIN=/usr/bin/ffmpeg
 ENV FFPROBE_BIN=/usr/bin/ffprobe
-ENV NO_CORS=1
-ENV CASTING_DISABLED=1
 ENV APP_PATH=/root/.stremio-server
 
 VOLUME ["/root/.stremio-server"]
