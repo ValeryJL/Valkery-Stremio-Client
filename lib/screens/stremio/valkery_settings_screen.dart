@@ -315,33 +315,36 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
           _buildCard(
             title: 'Reproductor Preferido',
             icon: IconsaxPlusBold.video_play,
-            child: Column(
-              children: [
-                RadioListTile<ValkeryPlayerType>(
-                  title: const Text('MediaKit Interno (Aceleración Hardware + PiP)'),
-                  subtitle: const Text('Recomendado: fluido, con subtítulos y miniatura.'),
-                  value: ValkeryPlayerType.mediaKit,
-                  groupValue: coordinator.preferredPlayer,
-                  activeColor: const Color(0xFF8B5CF6),
-                  onChanged: (val) {
-                    if (val != null) {
-                      ref.read(sourceCoordinatorProvider.notifier).setPreferredPlayer(val);
-                    }
-                  },
-                ),
-                RadioListTile<ValkeryPlayerType>(
-                  title: const Text('VLC Player Externo'),
-                  subtitle: const Text('Lanza la aplicación VLC instalada en el sistema.'),
-                  value: ValkeryPlayerType.vlcExternal,
-                  groupValue: coordinator.preferredPlayer,
-                  activeColor: const Color(0xFF8B5CF6),
-                  onChanged: (val) {
-                    if (val != null) {
-                      ref.read(sourceCoordinatorProvider.notifier).setPreferredPlayer(val);
-                    }
-                  },
-                ),
-              ],
+            child: Material(
+              type: MaterialType.transparency,
+              child: Column(
+                children: [
+                  RadioListTile<ValkeryPlayerType>(
+                    title: const Text('MediaKit Interno (Aceleración Hardware + PiP)'),
+                    subtitle: const Text('Recomendado: fluido, con subtítulos y miniatura.'),
+                    value: ValkeryPlayerType.mediaKit,
+                    groupValue: coordinator.preferredPlayer,
+                    activeColor: const Color(0xFF8B5CF6),
+                    onChanged: (val) {
+                      if (val != null) {
+                        ref.read(sourceCoordinatorProvider.notifier).setPreferredPlayer(val);
+                      }
+                    },
+                  ),
+                  RadioListTile<ValkeryPlayerType>(
+                    title: const Text('VLC Player Externo'),
+                    subtitle: const Text('Lanza la aplicación VLC instalada en el sistema.'),
+                    value: ValkeryPlayerType.vlcExternal,
+                    groupValue: coordinator.preferredPlayer,
+                    activeColor: const Color(0xFF8B5CF6),
+                    onChanged: (val) {
+                      if (val != null) {
+                        ref.read(sourceCoordinatorProvider.notifier).setPreferredPlayer(val);
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),

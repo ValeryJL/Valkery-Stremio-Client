@@ -39,7 +39,7 @@ extension WindowHelperSetup on WindowManager {
       }
     }
 
-    if (isMacDebug) {
+    if (isMacDebug || defaultTargetPlatform == TargetPlatform.windows) {
       await windowManager.setBackgroundColor(options.backgroundColor!);
       await windowManager.setSkipTaskbar(options.skipTaskbar ?? false);
       await windowManager.setTitleBarStyle(options.titleBarStyle!);

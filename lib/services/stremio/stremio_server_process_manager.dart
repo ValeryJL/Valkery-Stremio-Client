@@ -56,6 +56,13 @@ class StremioServerProcessManager {
           serverUrl: serverUrl ?? defaultServerUrl,
         );
 
+  void _safeNotifyStatus(StremioServerStatus status) {
+    _status = status;
+    if (!_statusController.isClosed) {
+      _statusController.add(status);
+    }
+  }
+
   /// Configures a custom Stremio Server URL (e.g. LAN server or VPS).
   void setCustomServerUrl(String url) {
     _serverUrl = url.trim().replaceAll(RegExp(r'/+$'), '');
@@ -73,7 +80,11 @@ class StremioServerProcessManager {
     _healthCheckTimer?.cancel();
     _healthCheckTimer = Timer.periodic(
       const Duration(seconds: 4),
-      (_) => checkHealth(),
+      (_) {
+        if (!_statusController.isClosed) {
+          checkHealth();
+        }
+      },
     );
   }
 
@@ -97,26 +108,31 @@ class StremioServerProcessManager {
           }
         }
 
-        _status = StremioServerStatus(
-          state: StremioServerState.online,
-          serverUrl: _serverUrl,
-          version: ver ?? 'v4.x',
-          activeTorrents: torrentsCount,
+        _safeNotifyStatus(
+          StremioServerStatus(
+            state: StremioServerState.online,
+            serverUrl: _serverUrl,
+            version: ver ?? 'v4.x',
+            activeTorrents: torrentsCount,
+          ),
         );
       } else {
-        _status = StremioServerStatus(
-          state: StremioServerState.offline,
-          serverUrl: _serverUrl,
+        _safeNotifyStatus(
+          StremioServerStatus(
+            state: StremioServerState.offline,
+            serverUrl: _serverUrl,
+          ),
         );
       }
     } catch (_) {
-      _status = StremioServerStatus(
-        state: StremioServerState.offline,
-        serverUrl: _serverUrl,
+      _safeNotifyStatus(
+        StremioServerStatus(
+          state: StremioServerState.offline,
+          serverUrl: _serverUrl,
+        ),
       );
     }
 
-    _statusController.add(_status);
     return _status;
   }
 
@@ -127,20 +143,22 @@ class StremioServerProcessManager {
     final initialCheck = await checkHealth();
     if (initialCheck.isOnline) return true;
 
-    _status = StremioServerStatus(
-      state: StremioServerState.starting,
-      serverUrl: _serverUrl,
+    _safeNotifyStatus(
+      StremioServerStatus(
+        state: StremioServerState.starting,
+        serverUrl: _serverUrl,
+      ),
     );
-    _statusController.add(_status);
 
     final exePath = executableOverride ?? _detectInstalledStremioExecutable();
     if (exePath == null) {
-      _status = StremioServerStatus(
-        state: StremioServerState.offline,
-        serverUrl: _serverUrl,
-        errorMessage: 'Stremio Streaming Server no encontrado en el sistema.',
+      _safeNotifyStatus(
+        StremioServerStatus(
+          state: StremioServerState.offline,
+          serverUrl: _serverUrl,
+          errorMessage: 'Stremio Streaming Server no encontrado en el sistema.',
+        ),
       );
-      _statusController.add(_status);
       return false;
     }
 
@@ -169,12 +187,13 @@ class StremioServerProcessManager {
       final health = await checkHealth();
       return health.isOnline;
     } catch (e) {
-      _status = StremioServerStatus(
-        state: StremioServerState.error,
-        serverUrl: _serverUrl,
-        errorMessage: 'Error al iniciar motor local: $e',
+      _safeNotifyStatus(
+        StremioServerStatus(
+          state: StremioServerState.error,
+          serverUrl: _serverUrl,
+          errorMessage: 'Error al iniciar motor local: $e',
+        ),
       );
-      _statusController.add(_status);
       return false;
     }
   }
