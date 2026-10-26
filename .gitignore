@@ -83,3 +83,5 @@ android/build/reports/problems/
 
 .staging_valkery_core/
 
+
+build_output/
