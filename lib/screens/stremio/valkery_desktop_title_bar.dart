@@ -208,3 +208,4 @@ class _ValkeryDesktopTitleBarState extends State<ValkeryDesktopTitleBar> with Wi
     );
   }
 }
+

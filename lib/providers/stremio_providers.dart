@@ -79,6 +79,13 @@ final stremioSearchResultsProvider = FutureProvider.autoDispose<List<MediaItem>>
   return service.searchCatalog(query);
 });
 
+/// Full media details (synopsis, cast, director, episodes, backdrop) from Cinemeta.
+final stremioMediaDetailsProvider = FutureProvider.family
+    .autoDispose<MediaItem, ({String id, String type})>((ref, params) async {
+  final service = ref.watch(catalogAndStreamServiceProvider);
+  return service.fetchMediaDetails(params.id, params.type);
+});
+
 /// Streams discovery for a specific media item ID and type.
 final stremioStreamsProvider = FutureProvider.family
     .autoDispose<List<StreamCandidate>, ({String id, String type, int? season, int? episode})>(

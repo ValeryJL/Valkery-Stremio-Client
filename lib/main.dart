@@ -3,7 +3,7 @@ import 'package:fladder/screens/stremio/valkery_main_shell.dart';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-
+import 'package:media_kit/media_kit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:fladder/bootstrap/app_bootstrap.dart';
@@ -27,6 +27,7 @@ import 'package:fladder/widgets/shared/adaptive_color.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
 
   final bootstrap = await bootstrapApplication(args);
 

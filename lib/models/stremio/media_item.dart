@@ -121,6 +121,10 @@ class MediaItem {
   final String description;
   final List<String> genres;
   final List<EpisodeItem> episodes;
+  final List<String> cast;
+  final List<String> director;
+  final String runtime;
+  final String releaseDate;
 
   const MediaItem({
     required this.id,
@@ -133,9 +137,13 @@ class MediaItem {
     this.description = '',
     this.genres = const [],
     this.episodes = const [],
+    this.cast = const [],
+    this.director = const [],
+    this.runtime = '',
+    this.releaseDate = '',
   });
 
-  String get releaseInfo => year;
+  String get releaseInfo => releaseDate.isNotEmpty ? releaseDate : year;
   bool get isSeries => type == 'series' || type == 'anime' || episodes.isNotEmpty;
 
   List<int> get seasons {
@@ -169,6 +177,10 @@ class MediaItem {
     String? description,
     List<String>? genres,
     List<EpisodeItem>? episodes,
+    List<String>? cast,
+    List<String>? director,
+    String? runtime,
+    String? releaseDate,
   }) {
     return MediaItem(
       id: id ?? this.id,
@@ -181,6 +193,10 @@ class MediaItem {
       description: description ?? this.description,
       genres: genres ?? this.genres,
       episodes: episodes ?? this.episodes,
+      cast: cast ?? this.cast,
+      director: director ?? this.director,
+      runtime: runtime ?? this.runtime,
+      releaseDate: releaseDate ?? this.releaseDate,
     );
   }
 
@@ -196,6 +212,10 @@ class MediaItem {
       'description': description,
       'genres': genres,
       'videos': episodes.map((e) => e.toJson()).toList(),
+      'cast': cast,
+      'director': director,
+      'runtime': runtime,
+      'released': releaseDate,
     };
   }
 
@@ -206,16 +226,40 @@ class MediaItem {
     final id = (meta['id'] ?? meta['imdb_id'] ?? '').toString();
     final type = (meta['type'] ?? 'movie').toString();
     final name = (meta['name'] ?? meta['title'] ?? 'Unknown Title').toString();
-    final poster = (meta['poster'] ?? '').toString();
-    final background = (meta['background'] ?? poster).toString();
+    var poster = (meta['poster'] ?? '').toString();
+    if (poster.isEmpty && id.startsWith('tt')) {
+      poster = 'https://images.metahub.space/poster/medium/$id/img.jpg';
+    }
+    final background = (meta['background'] ?? meta['backdrop'] ?? poster).toString();
     final year = (meta['year'] ?? meta['releaseInfo'] ?? '').toString();
-    final imdbRating = (meta['imdbRating'] ?? '').toString();
+    final releaseDate = (meta['released'] ?? meta['releaseInfo'] ?? year).toString();
+    final runtime = (meta['runtime'] ?? '').toString();
+    final imdbRating = (meta['imdbRating'] ?? meta['rating'] ?? '').toString();
     final description =
         (meta['description'] ?? meta['overview'] ?? '').toString();
 
     final rawGenres =
         (meta['genres'] ?? meta['genre'] ?? const <dynamic>[]) as List<dynamic>;
     final genres = rawGenres.map((g) => g.toString()).toList();
+
+    final rawCast =
+        (meta['cast'] ?? meta['actors'] ?? const <dynamic>[]) as List<dynamic>;
+    final cast = rawCast
+        .map((c) => c is Map ? (c['name'] ?? '').toString() : c.toString())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    final rawDir = meta['director'] ?? meta['directors'];
+    final director = <String>[];
+    if (rawDir is List) {
+      director.addAll(
+        rawDir
+            .map((d) => d is Map ? (d['name'] ?? '').toString() : d.toString())
+            .where((s) => s.isNotEmpty),
+      );
+    } else if (rawDir is String && rawDir.isNotEmpty) {
+      director.add(rawDir);
+    }
 
     final rawVideos =
         (meta['videos'] ?? meta['episodes'] ?? const <dynamic>[])
@@ -242,6 +286,10 @@ class MediaItem {
       description: description,
       genres: genres,
       episodes: episodes,
+      cast: cast,
+      director: director,
+      runtime: runtime,
+      releaseDate: releaseDate,
     );
   }
 }
