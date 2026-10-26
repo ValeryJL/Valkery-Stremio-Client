@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=Fladder
+Name=Valkery Stremio
 StartupWMClass=nl.jknaapen.fladder
-Comment=A Simple Jellyfin Frontend built on top of Flutter.
+Comment=Modern Stremio & Jellyfin Client built with Flutter.
 Exec=fladder
 Icon=nl.jknaapen.fladder
 Terminal=false

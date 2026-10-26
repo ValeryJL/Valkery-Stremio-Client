@@ -20,7 +20,7 @@
         android:required="false" />
 
     <application
-        android:label="Fladder"
+        android:label="Valkery Stremio"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/app_banner"
@@ -106,7 +106,7 @@
             android:exported="true"
             tools:ignore="Instantiatable">
             <intent-filter>
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </receiver>
 

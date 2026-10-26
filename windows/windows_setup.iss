@@ -6,13 +6,13 @@
 
 [Setup]
 AppId={{D573EDD5-117A-47AD-88AC-62C8EBD11DC7}
-AppName="Fladder"
+AppName="Valkery Stremio"
 AppVersion={#FLADDER_VERSION}
-AppPublisher="DonutWare"
-AppPublisherURL="https://github.com/DonutWare/Fladder"
-AppSupportURL="https://github.com/DonutWare/Fladder"
-AppUpdatesURL="https://github.com/DonutWare/Fladder"
-DefaultDirName={localappdata}\Programs\Fladder
+AppPublisher="Valkery"
+AppPublisherURL="https://github.com/ValeryJL/Valkery-Stremio-Client"
+AppSupportURL="https://github.com/ValeryJL/Valkery-Stremio-Client"
+AppUpdatesURL="https://github.com/ValeryJL/Valkery-Stremio-Client"
+DefaultDirName={localappdata}\Programs\ValkeryStremio
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
@@ -25,7 +25,7 @@ WizardStyle=modern
 
 SetupLogging=yes
 UninstallLogging=yes
-UninstallDisplayName="Fladder"
+UninstallDisplayName="Valkery Stremio"
 UninstallDisplayIcon={app}\fladder.exe
 SetupIconFile="{#SourcePath}\icons\production\fladder_icon.ico"
 LicenseFile="{#SourcePath}\LICENSE"
@@ -41,11 +41,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#SourcePath}\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Fladder"; Filename: "{app}\fladder.exe"
-Name: "{autodesktop}\Fladder"; Filename: "{app}\fladder.exe"; Tasks: desktopicon
+Name: "{autoprograms}\Valkery Stremio"; Filename: "{app}\fladder.exe"
+Name: "{autodesktop}\Valkery Stremio"; Filename: "{app}\fladder.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\fladder.exe"; Description: "{cm:LaunchProgram,Fladder}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\fladder.exe"; Description: "{cm:LaunchProgram,Valkery Stremio}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -55,9 +55,9 @@ begin
       begin
         if MsgBox('Would you like to delete the application''s data? This action cannot be undone. Synced files will remain unaffected.', mbConfirmation, MB_YESNO) = IDYES then
         begin
-            if DelTree(ExpandConstant('{localappdata}\DonutWare'), True, True, True) = False then
+            if DelTree(ExpandConstant('{localappdata}\ValkeryStremio'), True, True, True) = False then
             begin
-                Log(ExpandConstant('{localappdata}\DonutWare could not be deleted. Skipping...'));
+                Log(ExpandConstant('{localappdata}\ValkeryStremio could not be deleted. Skipping...'));
             end;
         end;
       end;

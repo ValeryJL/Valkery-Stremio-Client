@@ -967,7 +967,7 @@
   "@settingsBlurredPlaceholderTitle": {},
   "settingsClientDesc": "General, Time-out, Layout, Theme",
   "@settingsClientDesc": {},
-  "settingsClientTitle": "Fladder",
+  "settingsClientTitle": "Valkery",
   "@settingsClientTitle": {},
   "settingsContinue": "Continue",
   "@settingsContinue": {},
@@ -1434,7 +1434,7 @@
   "libraryShuffleAndPlayItems": "Shuffle and play items",
   "libraryPlayItems": "Play items",
   "clientSettingsShowAllCollectionsTitle": "Show all collection types",
-  "clientSettingsShowAllCollectionsDesc": "When enabled, show all collection types, including those not supported by Fladder",
+  "clientSettingsShowAllCollectionsDesc": "When enabled, show all collection types, including those not supported by Valkery",
   "stop": "Stop",
   "resumeVideo": "Resume video",
   "closeVideo": "Close video",
@@ -1514,9 +1514,9 @@
   "segmentActionSkipOnce": "Skip once",
   "segmentActionSkip": "Skip",
   "loading": "Loading",
-  "exitFladderTitle": "Exit Fladder",
-  "exitFladderDesc": "Are you sure you want to close Fladder?",
-  "quitMultipleWindowsDesc": "You have {count} windows open. Quitting Fladder will close all of them. Do you want to continue?",
+  "exitFladderTitle": "Exit Valkery",
+  "exitFladderDesc": "Are you sure you want to close Valkery?",
+  "quitMultipleWindowsDesc": "You have {count} windows open. Quitting Valkery will close all of them. Do you want to continue?",
   "@quitMultipleWindowsDesc": {
     "placeholders": {
       "count": {
@@ -2379,7 +2379,7 @@
   "@emailUsername": {},
   "discover": "Discover",
   "sponsor": "Sponsor",
-  "sponsorMessage": "If you enjoy using Fladder, consider sponsoring the project to support ongoing development and improvements. Thank you for your support!",
+  "sponsorMessage": "If you enjoy using Valkery, consider sponsoring the project to support ongoing development and improvements. Thank you for your support!",
   "min": "min",
   "max": "max",
   "manageRequest": "Manage request",
@@ -2701,7 +2701,7 @@
     }
   },
   "notificationTimerIOSWarning": " iOS decides when/if updates actually run, notifications may be delayed or not show up at all.",
-  "batteryOptimizationDesc": "Battery optimizations may delay background notifications for Fladder.\nTap to open system settings and disable optimizations for Fladder to improve notification reliability.",
+  "batteryOptimizationDesc": "Battery optimizations may delay background notifications for Valkery.\nTap to open system settings and disable optimizations for Valkery to improve notification reliability.",
   "@batteryOptimizationDesc": {},
   "updateCheckInterval": "Update check interval",
   "updateCheckIntervalDesc": "How often the background task runs",
