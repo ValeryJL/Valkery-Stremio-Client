@@ -309,6 +309,8 @@ class SubtitleTrack {
     this.addonName = 'OpenSubtitles v3',
   });
 
+  String get displayTitle => label.isNotEmpty ? label : (lang.isNotEmpty ? lang : id);
+
   bool get isSpanish {
     final normalized = lang.toLowerCase();
     return normalized == 'spa' ||

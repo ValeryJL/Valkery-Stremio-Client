@@ -238,7 +238,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       '${val.round()}%',
       _isMuted
           ? IconsaxPlusLinear.volume_cross
-          : (val > 50 ? IconsaxPlusLinear.volume_high : IconsaxPlusLinear.volume_low),
+          : (val > 50 ? IconsaxPlusLinear.volume_high : IconsaxPlusLinear.volume_low_1),
     );
     _showControls();
   }
@@ -375,7 +375,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
-              if (AdaptiveLayout.of(context).isDesktop || kIsWeb) {
+              if (AdaptiveLayout.isDesktop(context) || kIsWeb) {
                 // Single click on desktop/web toggles play/pause
                 _player.playOrPause();
                 _showControls();
@@ -555,7 +555,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                             ),
                           ),
                         Text(
-                          widget.stream.name ?? widget.stream.addonName,
+                          widget.stream.name.isNotEmpty ? widget.stream.name : widget.stream.addonName,
                           style: TextStyle(
                             color: const Color(0xFFC4B5FD).withValues(alpha: 0.9),
                             fontSize: 12,
@@ -841,11 +841,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
               icon: Icon(
                 _isMuted
                     ? IconsaxPlusLinear.volume_cross
-                    : (_volume > 50 ? IconsaxPlusLinear.volume_high : IconsaxPlusLinear.volume_low),
+                    : (_volume > 50 ? IconsaxPlusLinear.volume_high : IconsaxPlusLinear.volume_low_1),
               ),
               onPressed: _toggleMute,
             ),
-            if (AdaptiveLayout.of(context).isDesktop || kIsWeb)
+            if (AdaptiveLayout.isDesktop(context) || kIsWeb)
               SizedBox(
                 width: 90,
                 child: SliderTheme(
@@ -1074,7 +1074,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                                   style: const TextStyle(color: Colors.white),
                                 ),
                                 subtitle: Text(
-                                  extSub.addonName ?? 'OpenSubtitles',
+                                  extSub.addonName,
                                   style: const TextStyle(color: Colors.white54, fontSize: 11),
                                 ),
                                 trailing: _currentSubtitleTrack.title == extSub.displayTitle

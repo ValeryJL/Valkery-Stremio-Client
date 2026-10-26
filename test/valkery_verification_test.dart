@@ -80,6 +80,25 @@ void main() {
       expect(item.releaseInfo, equals('1994'));
       expect(item.isSeries, isFalse);
     });
+
+    test('SubtitleTrack exposes displayTitle fallback and language helpers', () {
+      const track1 = SubtitleTrack(
+        id: '1',
+        url: 'http://example.com/sub.srt',
+        lang: 'spa',
+        label: 'Español (Latino)',
+      );
+      expect(track1.displayTitle, equals('Español (Latino)'));
+      expect(track1.isSpanish, isTrue);
+
+      const track2 = SubtitleTrack(
+        id: '2',
+        url: 'http://example.com/sub2.srt',
+        lang: 'eng',
+        label: '',
+      );
+      expect(track2.displayTitle, equals('eng'));
+      expect(track2.isEnglish, isTrue);
+    });
   });
 }
-
