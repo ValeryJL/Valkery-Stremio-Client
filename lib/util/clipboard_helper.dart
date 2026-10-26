@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/util/localization_helper.dart';
 
 extension ClipboardHelper on BuildContext {

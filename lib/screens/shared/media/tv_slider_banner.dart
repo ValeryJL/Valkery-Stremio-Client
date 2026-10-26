@@ -12,7 +12,7 @@ import 'package:fladder/screens/shared/media/components/media_play_button.dart';
 import 'package:fladder/screens/shared/media/components/small_detail_widgets.dart';
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/item_base_model/item_base_model_extensions.dart';
 import 'package:fladder/util/item_base_model/play_item_helpers.dart';

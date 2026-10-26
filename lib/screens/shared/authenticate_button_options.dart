@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax_plus/iconsax_plus.dart';
 
 import 'package:fladder/models/account_model.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/screens/shared/passcode_input.dart';
 import 'package:fladder/util/auth_service.dart';
 import 'package:fladder/util/list_padding.dart';

@@ -8,7 +8,7 @@ import 'package:fladder/models/item_base_model.dart';
 import 'package:fladder/models/media_playback_model.dart';
 import 'package:fladder/providers/video_player_provider.dart';
 import 'package:fladder/wrappers/media_control_wrapper.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/item_base_model/item_base_model_extensions.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/models/playback/playback_queue_state.dart';

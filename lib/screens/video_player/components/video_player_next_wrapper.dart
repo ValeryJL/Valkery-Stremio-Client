@@ -17,7 +17,7 @@ import 'package:fladder/providers/video_player_provider.dart';
 import 'package:fladder/screens/shared/animated_fade_size.dart';
 import 'package:fladder/screens/shared/default_title_bar.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/list_padding.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/widgets/full_screen_helpers/full_screen_wrapper.dart';

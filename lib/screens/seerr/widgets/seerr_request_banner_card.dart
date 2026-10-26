@@ -14,7 +14,7 @@ import 'package:fladder/screens/seerr/widgets/seerr_request_popup.dart';
 import 'package:fladder/screens/seerr/widgets/seerr_user_label.dart';
 import 'package:fladder/seerr/seerr_models.dart';
 import 'package:fladder/theme.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/widgets/shared/item_actions.dart';

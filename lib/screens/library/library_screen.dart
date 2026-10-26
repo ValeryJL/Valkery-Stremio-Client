@@ -21,7 +21,7 @@ import 'package:fladder/screens/shared/nested_scaffold.dart';
 import 'package:fladder/screens/shared/nested_sliver_appbar.dart';
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/sliver_list_padding.dart';

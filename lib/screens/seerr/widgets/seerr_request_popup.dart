@@ -12,12 +12,12 @@ import 'package:fladder/screens/seerr/widgets/request_configuration_section.dart
 import 'package:fladder/screens/seerr/widgets/request_popup_widgets.dart';
 import 'package:fladder/screens/seerr/widgets/seasons_section.dart';
 import 'package:fladder/screens/shared/adaptive_dialog.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/screens/shared/media/external_urls.dart';
 import 'package:fladder/seerr/seerr_models.dart';
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/refresh_state.dart';

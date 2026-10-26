@@ -10,22 +10,22 @@ script:
   - rm -rf AppDir || true
   - cp -r build/linux/x64/release/bundle AppDir
   - mkdir -p AppDir/usr/share/icons/
-  - cp icons/production/fladder_icon_desktop.png AppDir/usr/share/icons/
+  - cp icons/production/valkery_icon_desktop.png AppDir/usr/share/icons/
 AppDir:
   path: ./AppDir
   app_info:
     id: nl.jknaapen.fladder
     name: Valkery Stremio
-    icon: fladder_icon_desktop
+    icon: valkery_icon_desktop
     version: latest
-    exec: fladder
+    exec: valkery
     exec_args: $@
   files:
     include:
       - assets/fonts/rubik/Rubik-Italic-VariableFont_wght.ttf
       - assets/fonts/rubik/Rubik-VariableFont_wght.ttf
-      - icons/production/fladder_icon_desktop.png
+      - icons/production/valkery_icon_desktop.png
 AppImage:
   arch: x86_64
   update-information: gh-releases-zsync|DonutWare|Fladder|latest|Fladder-Linux-*.AppImage.zsync
-  file_name: Valkery Stremio_x86_64.AppImage
+  file_name: Valkery_Stremio_x86_64.AppImage

@@ -26,7 +26,7 @@ import 'package:fladder/util/item_base_model/item_base_model_extensions.dart';
 import 'package:fladder/util/list_padding.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/themes_data.dart';
-import 'package:fladder/widgets/navigation_scaffold/components/fladder_app_bar.dart';
+import 'package:fladder/widgets/navigation_scaffold/components/valkery_app_bar.dart';
 import 'package:fladder/widgets/shared/animated_icon.dart';
 import 'package:fladder/widgets/shared/elevated_icon.dart';
 import 'package:fladder/widgets/shared/hover_widget.dart';

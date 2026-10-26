@@ -12,11 +12,11 @@ import 'package:fladder/providers/user_provider.dart';
 import 'package:fladder/screens/settings/widgets/settings_message_box.dart';
 import 'package:fladder/screens/shared/adaptive_dialog.dart';
 import 'package:fladder/screens/shared/animated_fade_size.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/screens/shared/focused_outlined_text_field.dart';
 import 'package:fladder/screens/shared/outlined_text_field.dart';
 import 'package:fladder/seerr/seerr_models.dart';
-import 'package:fladder/util/fladder_config.dart';
+import 'package:fladder/util/valkery_config.dart';
 import 'package:fladder/util/localization_helper.dart';
 
 final _stackTracePattern = RegExp(r'\n#\d');

@@ -9,7 +9,7 @@ import 'package:fladder/models/items/channel_program.dart';
 import 'package:fladder/screens/details_screens/components/overview_header.dart';
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/widgets/shared/ensure_visible.dart';

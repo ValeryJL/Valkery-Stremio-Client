@@ -9,7 +9,7 @@ import 'package:fladder/models/items/images_models.dart';
 import 'package:fladder/models/items/item_shared_models.dart';
 import 'package:fladder/models/items/overview_model.dart';
 import 'package:fladder/theme.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 
 part 'playlist_model.mapper.dart';
 

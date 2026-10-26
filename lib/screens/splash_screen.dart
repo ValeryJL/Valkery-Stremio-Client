@@ -8,7 +8,7 @@ import 'package:fladder/providers/arguments_provider.dart';
 import 'package:fladder/providers/shared_provider.dart';
 import 'package:fladder/providers/user_provider.dart';
 import 'package:fladder/routes/auto_router.gr.dart';
-import 'package:fladder/screens/shared/fladder_logo.dart';
+import 'package:fladder/screens/shared/valkery_logo.dart';
 import 'package:fladder/screens/shared/route_wrapper.dart';
 import 'package:fladder/services/local_network_permission.dart';
 

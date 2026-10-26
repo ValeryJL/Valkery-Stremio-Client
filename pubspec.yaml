@@ -246,8 +246,8 @@ flutter:
 flutter_native_splash:
   color: "#210000"
   color_dark: "#210000"
-  image: icons/production/fladder_icon.png
-  image_dark: icons/production/fladder_icon.png
+  image: icons/production/valkery_icon.png
+  image_dark: icons/production/valkery_icon.png
   android: true
   ios: false
   web: false

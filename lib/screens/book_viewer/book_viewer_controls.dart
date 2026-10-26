@@ -14,12 +14,12 @@ import 'package:fladder/providers/settings/book_viewer_settings_provider.dart';
 import 'package:fladder/screens/book_viewer/book_viewer_chapters.dart';
 import 'package:fladder/screens/book_viewer/book_viewer_settings.dart';
 import 'package:fladder/screens/shared/default_title_bar.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
 import 'package:fladder/util/input_handler.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/throttler.dart';
-import 'package:fladder/widgets/shared/fladder_slider.dart';
+import 'package:fladder/widgets/shared/valkery_slider.dart';
 
 class BookViewController {
   bool controlsVisible = true;

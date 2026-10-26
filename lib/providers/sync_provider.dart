@@ -44,7 +44,7 @@ import 'package:fladder/providers/sync/background_download_provider.dart';
 import 'package:fladder/providers/sync/sync_provider_media.dart';
 import 'package:fladder/providers/sync/sync_provider_overlay.dart';
 import 'package:fladder/providers/user_provider.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/util/duration_extensions.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/string_extensions.dart';

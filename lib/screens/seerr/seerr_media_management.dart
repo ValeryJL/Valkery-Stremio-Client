@@ -7,7 +7,7 @@ import 'package:fladder/models/seerr/seerr_dashboard_model.dart';
 import 'package:fladder/providers/seerr_api_provider.dart';
 import 'package:fladder/providers/seerr_user_provider.dart';
 import 'package:fladder/providers/user_provider.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/screens/shared/media/external_urls.dart';
 import 'package:fladder/seerr/seerr_models.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';

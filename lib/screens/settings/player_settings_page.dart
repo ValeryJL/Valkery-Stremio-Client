@@ -26,7 +26,7 @@ import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
 import 'package:fladder/util/bitrate_helper.dart';
 import 'package:fladder/util/box_fit_extension.dart';
 import 'package:fladder/util/localization_helper.dart';
-import 'package:fladder/widgets/shared/fladder_slider.dart';
+import 'package:fladder/widgets/shared/valkery_slider.dart';
 import 'package:fladder/widgets/shared/item_actions.dart';
 import 'package:fladder/wrappers/pip_manager.dart';
 

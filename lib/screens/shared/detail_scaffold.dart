@@ -18,7 +18,7 @@ import 'package:fladder/screens/syncing/sync_item_details.dart';
 import 'package:fladder/shaders/fade_edges.dart';
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/refresh_state.dart';
 import 'package:fladder/util/router_extension.dart';

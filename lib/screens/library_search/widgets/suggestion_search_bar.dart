@@ -10,7 +10,7 @@ import 'package:fladder/providers/library_search_provider.dart';
 import 'package:fladder/screens/shared/outlined_text_field.dart';
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/debouncer.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/localization_helper.dart';
 
 class SuggestionSearchBar extends ConsumerStatefulWidget {

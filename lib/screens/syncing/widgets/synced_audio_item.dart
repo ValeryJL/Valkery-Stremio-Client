@@ -15,7 +15,7 @@ import 'package:fladder/screens/shared/flat_button.dart';
 import 'package:fladder/screens/syncing/sync_widgets.dart';
 import 'package:fladder/screens/syncing/widgets/sync_file_button.dart';
 import 'package:fladder/screens/syncing/widgets/sync_item_poster.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/list_padding.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/size_formatting.dart';

@@ -67,7 +67,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "nl.jknaapen.fladder"
+        applicationId = "com.valkery.stremio"
         minSdkVersion flutter.minSdkVersion
         targetSdk = 37
         versionCode = flutter.versionCode

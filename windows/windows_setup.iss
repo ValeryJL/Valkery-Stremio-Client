@@ -18,7 +18,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-OutputBaseFilename=fladder_setup
+OutputBaseFilename=Valkery-Stremio-Setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -26,10 +26,10 @@ WizardStyle=modern
 SetupLogging=yes
 UninstallLogging=yes
 UninstallDisplayName="Valkery Stremio"
-UninstallDisplayIcon={app}\fladder.exe
-SetupIconFile="{#SourcePath}\icons\production\fladder_icon.ico"
+UninstallDisplayIcon={app}\valkery.exe
+SetupIconFile="{#SourcePath}\icons\production\valkery_icon.ico"
 LicenseFile="{#SourcePath}\LICENSE"
-WizardImageFile={#SourcePath}\assets\windows-installer\fladder-installer-100.bmp,{#SourcePath}\assets\windows-installer\fladder-installer-125.bmp,{#SourcePath}\assets\windows-installer\fladder-installer-150.bmp
+WizardImageFile={#SourcePath}\assets\windows-installer\valkery-installer-100.bmp,{#SourcePath}\assets\windows-installer\valkery-installer-125.bmp,{#SourcePath}\assets\windows-installer\valkery-installer-150.bmp
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -41,11 +41,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#SourcePath}\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Valkery Stremio"; Filename: "{app}\fladder.exe"
-Name: "{autodesktop}\Valkery Stremio"; Filename: "{app}\fladder.exe"; Tasks: desktopicon
+Name: "{autoprograms}\Valkery Stremio"; Filename: "{app}\valkery.exe"
+Name: "{autodesktop}\Valkery Stremio"; Filename: "{app}\valkery.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\fladder.exe"; Description: "{cm:LaunchProgram,Valkery Stremio}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\valkery.exe"; Description: "{cm:LaunchProgram,Valkery Stremio}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

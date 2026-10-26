@@ -8,7 +8,7 @@ import 'package:fladder/providers/sync/sync_provider_helpers.dart';
 import 'package:fladder/screens/syncing/sync_button.dart';
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/item_base_model/item_base_model_extensions.dart';
 import 'package:fladder/util/item_base_model/play_item_helpers.dart';

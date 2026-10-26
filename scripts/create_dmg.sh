@@ -6,10 +6,10 @@
 set -e
 
 # Configuration
-APP_NAME="Fladder"
+APP_NAME="Valkery"
 APP_PATH="build/macos/Build/Products/Release-production/Fladder.app"
 DMG_PATH="build/macos/Build/Products/Release-production/macOS.dmg"
-BACKGROUND_IMAGE="assets/macos-dmg/Fladder-DMG-Background.jpg"
+BACKGROUND_IMAGE="assets/macos-dmg/Valkery-DMG-Background.jpg"
 TEMP_DMG_DIR="dmg_temp"
 
 # Check if app exists

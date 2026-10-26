@@ -29,12 +29,12 @@ import 'package:fladder/screens/video_player/components/video_volume_slider.dart
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
 import 'package:fladder/util/duration_extensions.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/item_base_model/item_base_model_extensions.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/widgets/shared/clickable_text.dart';
-import 'package:fladder/widgets/shared/fladder_slider.dart';
+import 'package:fladder/widgets/shared/valkery_slider.dart';
 import 'package:fladder/widgets/shared/item_actions.dart';
 import 'package:fladder/widgets/shared/modal_bottom_sheet.dart';
 import 'package:fladder/widgets/shared/theme_overwrite.dart';

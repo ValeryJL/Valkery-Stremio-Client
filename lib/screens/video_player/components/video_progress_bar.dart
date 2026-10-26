@@ -11,7 +11,7 @@ import 'package:fladder/util/duration_extensions.dart';
 import 'package:fladder/util/list_padding.dart';
 import 'package:fladder/util/string_extensions.dart';
 import 'package:fladder/widgets/gapped_container_shape.dart';
-import 'package:fladder/widgets/shared/fladder_slider.dart';
+import 'package:fladder/widgets/shared/valkery_slider.dart';
 import 'package:fladder/widgets/shared/trick_play_image.dart';
 
 class VideoProgressBar extends ConsumerStatefulWidget {

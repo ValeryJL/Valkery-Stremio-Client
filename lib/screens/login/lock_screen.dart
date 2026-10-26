@@ -9,7 +9,7 @@ import 'package:fladder/models/account_model.dart';
 import 'package:fladder/providers/user_provider.dart';
 import 'package:fladder/routes/auto_router.gr.dart';
 import 'package:fladder/screens/login/widgets/login_icon.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/screens/shared/passcode_input.dart';
 import 'package:fladder/screens/shared/route_wrapper.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';

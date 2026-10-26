@@ -11,7 +11,7 @@ import 'package:pretty_qr_code/pretty_qr_code.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:fladder/models/account_model.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/screens/shared/outlined_text_field.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
 import 'package:fladder/util/deep_link_helper.dart';
@@ -79,7 +79,7 @@ class _AuthLinkDialogState extends State<AuthLinkDialog> {
 
   late final qrDecoration = PrettyQrDecoration(
     image: PrettyQrDecorationImage(
-      image: Image.asset("icons/fladder_notification_icon.png").image,
+      image: Image.asset("icons/valkery_notification_icon.png").image,
       colorFilter: ColorFilter.mode(
         Theme.of(context).colorScheme.primary,
         BlendMode.srcIn,

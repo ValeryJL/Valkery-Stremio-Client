@@ -6,7 +6,7 @@ import 'package:fladder/providers/control_panel/control_activity_provider.dart';
 import 'package:fladder/screens/shared/user_icon.dart';
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/humanize_duration.dart';
 import 'package:fladder/util/localization_helper.dart';

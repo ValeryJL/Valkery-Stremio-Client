@@ -7,7 +7,7 @@ import 'package:fladder/jellyfin/jellyfin_open_api.swagger.dart';
 import 'package:fladder/providers/control_panel/control_active_tasks_provider.dart';
 import 'package:fladder/providers/control_panel/control_livetv_provider.dart';
 import 'package:fladder/screens/control_panel/control_livetv/listing_provider_edit_dialog.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/refresh_state.dart';
 

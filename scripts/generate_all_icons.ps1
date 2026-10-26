@@ -35,20 +35,20 @@ function Save-ResizedImage($width, $height, $destPath) {
 }
 
 # 1. Root and Subdirectory Icons in icons/
-Save-ResizedImage 1024 1024 "icons/fladder_notification_icon.png"
+Save-ResizedImage 1024 1024 "icons/valkery_notification_icon.png"
 
 $iconDirs = @("icons/production", "icons/development")
 foreach ($dir in $iconDirs) {
-    Save-ResizedImage 1024 1024 "$dir/fladder_icon.png"
-    Save-ResizedImage 1024 1024 "$dir/fladder_adaptive_icon.png"
-    Save-ResizedImage 1024 1024 "$dir/fladder_icon_desktop.png"
-    Save-ResizedImage 1024 1024 "$dir/fladder_macos_icon.png"
-    Save-ResizedImage 1024 1024 "$dir/fladder_store_icon.png"
+    Save-ResizedImage 1024 1024 "$dir/valkery_icon.png"
+    Save-ResizedImage 1024 1024 "$dir/valkery_adaptive_icon.png"
+    Save-ResizedImage 1024 1024 "$dir/valkery_icon_desktop.png"
+    Save-ResizedImage 1024 1024 "$dir/valkery_macos_icon.png"
+    Save-ResizedImage 1024 1024 "$dir/valkery_store_icon.png"
 }
-Save-ResizedImage 512 512 "icons/production/fladder_icon_512.png"
-Copy-Item $sourceIco "icons/production/fladder_icon.ico" -Force
+Save-ResizedImage 512 512 "icons/production/valkery_icon_512.png"
+Copy-Item $sourceIco "icons/production/valkery_icon.ico" -Force
 if (Test-Path "icons/development") {
-    Copy-Item $sourceIco "icons/development/fladder_icon.ico" -Force
+    Copy-Item $sourceIco "icons/development/valkery_icon.ico" -Force
 }
 
 # 2. Android Mipmaps for all flavors

@@ -17,7 +17,7 @@ import 'package:fladder/providers/views_provider.dart';
 import 'package:fladder/routes/auto_router.gr.dart';
 import 'package:fladder/screens/dashboard/music_playlist_row.dart';
 import 'package:fladder/screens/home_screen.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/screens/shared/media/poster_row.dart';
 import 'package:fladder/screens/shared/media/track_list.dart';
 import 'package:fladder/screens/shared/nested_scaffold.dart';

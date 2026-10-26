@@ -8,7 +8,7 @@ import 'package:fladder/providers/views_provider.dart';
 import 'package:fladder/screens/settings/settings_list_tile.dart';
 import 'package:fladder/screens/settings/widgets/settings_label_divider.dart';
 import 'package:fladder/screens/settings/widgets/settings_list_group.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/widgets/shared/filled_button_await.dart';

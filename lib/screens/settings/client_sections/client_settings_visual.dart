@@ -11,7 +11,7 @@ import 'package:fladder/screens/settings/widgets/settings_list_group.dart';
 import 'package:fladder/screens/shared/input_fields.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
 import 'package:fladder/util/localization_helper.dart';
-import 'package:fladder/widgets/shared/fladder_slider.dart';
+import 'package:fladder/widgets/shared/valkery_slider.dart';
 import 'package:fladder/widgets/shared/item_actions.dart';
 
 List<Widget> buildClientSettingsVisual(

@@ -7,7 +7,7 @@ import 'package:iconsax_plus/iconsax_plus.dart';
 import 'package:fladder/models/credentials_model.dart';
 import 'package:fladder/providers/discovery_provider.dart';
 import 'package:fladder/services/local_network_permission.dart';
-import 'package:fladder/util/fladder_config.dart';
+import 'package:fladder/util/valkery_config.dart';
 import 'package:fladder/util/list_padding.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/theme_extensions.dart';

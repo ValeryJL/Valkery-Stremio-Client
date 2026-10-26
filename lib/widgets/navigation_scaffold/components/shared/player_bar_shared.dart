@@ -8,7 +8,7 @@ import 'package:fladder/providers/video_player_provider.dart';
 import 'package:fladder/screens/shared/flat_button.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
 import 'package:fladder/util/duration_extensions.dart';
-import 'package:fladder/widgets/shared/fladder_slider.dart';
+import 'package:fladder/widgets/shared/valkery_slider.dart';
 import 'package:fladder/widgets/shared/item_actions.dart';
 
 const videoPlayerHeroTag = "HeroPlayer";

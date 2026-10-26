@@ -7,7 +7,7 @@ import 'package:square_progress_indicator/square_progress_indicator.dart';
 import 'package:fladder/models/item_base_model.dart';
 import 'package:fladder/providers/playlist_provider.dart';
 import 'package:fladder/screens/shared/adaptive_dialog.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/screens/shared/outlined_text_field.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/localization_helper.dart';

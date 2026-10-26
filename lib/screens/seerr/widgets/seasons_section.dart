@@ -8,7 +8,7 @@ import 'package:fladder/providers/seerr/seerr_request_provider.dart';
 import 'package:fladder/screens/seerr/widgets/season_download_progress_widget.dart';
 import 'package:fladder/seerr/seerr_models.dart';
 import 'package:fladder/theme.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/widgets/shared/ensure_visible.dart';

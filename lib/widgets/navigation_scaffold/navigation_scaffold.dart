@@ -16,7 +16,7 @@ import 'package:fladder/screens/shared/nested_bottom_appbar.dart';
 import 'package:fladder/screens/video_player/audio_player_full_screen.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/destination_model.dart';
-import 'package:fladder/widgets/navigation_scaffold/components/fladder_app_bar.dart';
+import 'package:fladder/widgets/navigation_scaffold/components/valkery_app_bar.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/floating_player_bar.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/navigation_body.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/navigation_drawer.dart';

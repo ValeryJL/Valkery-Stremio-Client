@@ -7,7 +7,7 @@ import 'package:iconsax_plus/iconsax_plus.dart';
 
 import 'package:fladder/providers/settings/video_player_settings_provider.dart';
 import 'package:fladder/util/list_padding.dart';
-import 'package:fladder/widgets/shared/fladder_slider.dart';
+import 'package:fladder/widgets/shared/valkery_slider.dart';
 
 class VideoVolumeSlider extends ConsumerStatefulWidget {
   final double? width;

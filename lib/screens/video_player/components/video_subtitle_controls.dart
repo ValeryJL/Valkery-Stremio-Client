@@ -10,7 +10,7 @@ import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/list_padding.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/widget_extensions.dart';
-import 'package:fladder/widgets/shared/fladder_slider.dart';
+import 'package:fladder/widgets/shared/valkery_slider.dart';
 
 Future<void> showSubtitleControls({
   required BuildContext context,

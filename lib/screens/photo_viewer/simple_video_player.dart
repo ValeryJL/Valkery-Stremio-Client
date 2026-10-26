@@ -15,8 +15,8 @@ import 'package:fladder/providers/settings/video_player_settings_provider.dart';
 import 'package:fladder/providers/user_provider.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
 import 'package:fladder/util/duration_extensions.dart';
-import 'package:fladder/util/fladder_image.dart';
-import 'package:fladder/widgets/shared/fladder_slider.dart';
+import 'package:fladder/util/valkery_image.dart';
+import 'package:fladder/widgets/shared/valkery_slider.dart';
 import 'package:fladder/wrappers/players/base_player.dart';
 import 'package:fladder/wrappers/players/lib_mdk.dart'
     if (dart.library.html) 'package:fladder/stubs/web/lib_mdk_web.dart';

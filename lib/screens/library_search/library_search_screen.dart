@@ -40,7 +40,7 @@ import 'package:fladder/util/router_extension.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/background_image.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/settings_user_icon.dart';
 import 'package:fladder/widgets/shared/bottom_menu_bar.dart';
-import 'package:fladder/widgets/shared/fladder_scrollbar.dart';
+import 'package:fladder/widgets/shared/valkery_scrollbar.dart';
 import 'package:fladder/widgets/shared/hide_on_scroll.dart';
 import 'package:fladder/widgets/shared/item_actions.dart';
 import 'package:fladder/widgets/shared/modal_bottom_sheet.dart';

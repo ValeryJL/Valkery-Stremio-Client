@@ -21,13 +21,13 @@ import 'package:fladder/screens/login/widgets/advanced_login_options_dialog.dart
 import 'package:fladder/screens/login/widgets/connect_link_dialog.dart';
 import 'package:fladder/screens/login/widgets/discover_servers_widget.dart';
 import 'package:fladder/screens/shared/animated_fade_size.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/screens/shared/outlined_text_field.dart';
 import 'package:fladder/screens/shared/passcode_input.dart';
 import 'package:fladder/services/local_network_permission.dart';
 import 'package:fladder/util/auth_service.dart';
 import 'package:fladder/util/deep_link_helper.dart';
-import 'package:fladder/util/fladder_config.dart';
+import 'package:fladder/util/valkery_config.dart';
 import 'package:fladder/util/localization_helper.dart';
 
 class LoginScreenCredentials extends ConsumerStatefulWidget {

@@ -10,7 +10,7 @@ import 'package:fladder/providers/live_tv_provider.dart';
 import 'package:fladder/screens/live_tv/widgets/channel_row.dart';
 import 'package:fladder/screens/live_tv/widgets/guide_constants.dart';
 import 'package:fladder/screens/live_tv/widgets/timeline_header.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 
 class LiveTvGuide extends ConsumerStatefulWidget {
   final ChannelModel? currentChannel;

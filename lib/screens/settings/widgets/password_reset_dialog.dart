@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:fladder/providers/control_panel/control_users_provider.dart';
 import 'package:fladder/providers/user_provider.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/screens/shared/outlined_text_field.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/widgets/shared/filled_button_await.dart';

@@ -8,7 +8,7 @@ import 'package:fladder/models/items/images_models.dart';
 import 'package:fladder/models/settings/client_settings_model.dart';
 import 'package:fladder/providers/api_provider.dart';
 import 'package:fladder/providers/settings/client_settings_provider.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 
 final _backgroundImageProvider = StateProvider<ImageData?>((ref) => null);
 

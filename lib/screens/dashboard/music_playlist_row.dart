@@ -7,7 +7,7 @@ import 'package:fladder/models/item_base_model.dart';
 import 'package:fladder/models/items/playlist_model.dart';
 import 'package:fladder/theme.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/item_base_model/item_base_model_extensions.dart';
 import 'package:fladder/util/sticky_header_text.dart';

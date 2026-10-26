@@ -13,7 +13,7 @@ import 'package:fladder/screens/control_panel/control_livetv/tuner_host_card.dar
 import 'package:fladder/screens/control_panel/control_livetv/tuner_host_edit_dialog.dart';
 import 'package:fladder/screens/control_panel/widgets/control_panel_card.dart';
 import 'package:fladder/screens/settings/settings_scaffold.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/util/localization_helper.dart';
 import 'package:fladder/util/refresh_state.dart';
 import 'package:fladder/widgets/shared/pull_to_refresh.dart';

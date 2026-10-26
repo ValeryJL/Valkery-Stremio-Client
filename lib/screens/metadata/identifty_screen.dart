@@ -8,7 +8,7 @@ import 'package:fladder/models/item_base_model.dart';
 import 'package:fladder/providers/items/identify_provider.dart';
 import 'package:fladder/screens/shared/adaptive_dialog.dart';
 import 'package:fladder/screens/shared/animated_fade_size.dart';
-import 'package:fladder/screens/shared/fladder_notification_overlay.dart';
+import 'package:fladder/screens/shared/valkery_notification_overlay.dart';
 import 'package:fladder/screens/shared/focused_outlined_text_field.dart';
 import 'package:fladder/util/custom_cache_manager.dart';
 import 'package:fladder/util/list_padding.dart';

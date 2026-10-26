@@ -30,7 +30,7 @@ import 'package:fladder/util/map_bool_helper.dart';
 import 'package:fladder/util/refresh_state.dart';
 import 'package:fladder/util/string_extensions.dart';
 import 'package:fladder/widgets/shared/enum_selection.dart';
-import 'package:fladder/widgets/shared/fladder_slider.dart';
+import 'package:fladder/widgets/shared/valkery_slider.dart';
 import 'package:fladder/widgets/shared/item_actions.dart';
 import 'package:fladder/widgets/shared/modal_bottom_sheet.dart';
 import 'package:fladder/widgets/shared/spaced_list_tile.dart';

@@ -11,7 +11,7 @@ import 'package:fladder/screens/live_tv/live_tv_guide.dart';
 import 'package:fladder/screens/shared/default_alert_dialog.dart';
 import 'package:fladder/screens/video_player/tv_player_controls.dart';
 import 'package:fladder/theme.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/util/focus_provider.dart';
 import 'package:fladder/util/localization_helper.dart';
 

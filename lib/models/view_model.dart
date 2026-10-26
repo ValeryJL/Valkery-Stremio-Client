@@ -14,7 +14,7 @@ import 'package:fladder/models/items/images_models.dart';
 import 'package:fladder/models/library_filter_model.dart';
 import 'package:fladder/routes/auto_router.gr.dart';
 import 'package:fladder/theme.dart';
-import 'package:fladder/util/fladder_image.dart';
+import 'package:fladder/util/valkery_image.dart';
 import 'package:fladder/widgets/navigation_scaffold/components/navigation_button.dart';
 import 'package:fladder/widgets/shared/item_actions.dart';
 
