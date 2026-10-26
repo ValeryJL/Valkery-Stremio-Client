@@ -1,4 +1,5 @@
 # Miscellaneous
+windows_build_artifacts/
 *.class
 *.log
 *.pyc

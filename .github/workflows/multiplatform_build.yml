@@ -61,7 +61,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Valkery-Stremio-Client-Android-APK
-          path: build/app/outputs/flutter-apk/*-release.apk
+          path: build/app/outputs/flutter-apk/*.apk
 
   build-linux:
     name: Build Linux Desktop x64
@@ -99,8 +99,8 @@ jobs:
         run: |
           flutter pub get
           flutter build macos --release --flavor production
-          cd build/macos/Build/Products/Release
-          zip -r ../../../../../Valkery-Stremio-Client-macOS.zip valkery_stremio_client.app
+          cd build/macos/Build/Products/Release-production
+          zip -r ../../../../../Valkery-Stremio-Client-macOS.zip Fladder.app
       - uses: actions/upload-artifact@v4
         with:
           name: Valkery-Stremio-Client-macOS

@@ -79,10 +79,12 @@ android {
 
     signingConfigs {
         release {
-            storeFile file('keystore.jks')
-            keyAlias keystoreProperties['keyAlias']
-            keyPassword keystoreProperties['keyPassword']
-            storePassword keystoreProperties['storePassword']
+            if (file('keystore.jks').exists()) {
+                storeFile file('keystore.jks')
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storePassword keystoreProperties['storePassword']
+            }
         }
     }
     buildTypes {
@@ -90,7 +92,11 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-            signingConfig signingConfigs.release
+            if (file('keystore.jks').exists()) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
 
             packagingOptions {
                 resources {
