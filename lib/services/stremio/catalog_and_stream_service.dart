@@ -17,11 +17,17 @@ class CatalogAndStreamService {
 
   static const List<String> defaultTrackers = [
     'udp://tracker.opentrackr.org:1337/announce',
-    'udp://open.demonii.com:1337/announce',
-    'udp://tracker.openbittorrent.com:6969/announce',
-    'udp://exodus.desync.com:6969/announce',
     'udp://open.stealth.si:80/announce',
-    'http://nyaa.tracker.wf:7777/announce',
+    'udp://tracker.torrent.eu.org:451/announce',
+    'udp://open.demonii.com:1337/announce',
+    'udp://exodus.desync.com:6969/announce',
+    'udp://explodie.org:6969/announce',
+    'https://1.tracker.eu.org:443/announce',
+    'https://tracker.foreverpirates.co:443/announce',
+    'https://tracker.tamersunion.org:443/announce',
+    'http://tracker.dler.com:6969/announce',
+    'http://tracker.renfei.net:8080/announce',
+    'wss://tracker.openwebtorrent.com:443/announce',
   ];
 
   final http.Client _httpClient;

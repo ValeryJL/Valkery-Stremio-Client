@@ -59,7 +59,7 @@ void main() {
       expect(state.isStremioOnly, isTrue);
     });
 
-    test('StreamCandidate generates valid playback URL for local Stremio server', () {
+    test('StreamCandidate generates valid playback URL for local Stremio server with default and fallback trackers', () {
       const torrent = StreamCandidate(
         title: 'Big Buck Bunny 1080p',
         name: 'Torrentio 1080p',
@@ -68,15 +68,23 @@ void main() {
       );
       expect(
         torrent.playbackUrl,
-        equals('http://127.0.0.1:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/0'),
+        startsWith('http://127.0.0.1:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/0?'),
+      );
+      expect(
+        torrent.playbackUrl,
+        contains('tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce'),
+      );
+      expect(
+        torrent.playbackUrl,
+        contains('tr=https%3A%2F%2F1.tracker.eu.org%3A443%2Fannounce'),
       );
       expect(
         torrent.playbackUrlFor('http://example.com:11470/'),
-        equals('http://example.com:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/0'),
+        startsWith('http://example.com:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/0?'),
       );
       expect(
         torrent.hlsPlaybackUrlFor('http://example.com:11470'),
-        equals('http://example.com:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/0/hls.m3u8'),
+        startsWith('http://example.com:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/0/hls.m3u8?'),
       );
 
       // Verify null fileIdx uses -1 for automatic largest video selection
@@ -87,7 +95,7 @@ void main() {
       );
       expect(
         autoTorrent.playbackUrl,
-        equals('http://127.0.0.1:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/-1'),
+        startsWith('http://127.0.0.1:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/-1?'),
       );
 
       // Verify sources are cleanly passed as tr= and never f=

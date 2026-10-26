@@ -55,6 +55,10 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   String? _playbackError;
   bool _isRetrying = false;
   bool _isInitialLoading = true;
+  int _openRetryCount = 0;
+  static const int _maxRetries = 4;
+  bool _isMetadataReady = false;
+  String _torrentStatusMessage = 'Conectando al enjambre de torrents...';
   Timer? _torrentStatsTimer;
   int _torrentPeers = 0;
   int _torrentDownloadSpeed = 0;
@@ -110,14 +114,31 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     );
 
     _errorSubscription = _player.stream.error.listen((err) {
-      if (mounted) {
-        setState(() {
-          _playbackError = err;
-          _isInitialLoading = false;
-          _isControlsVisible = true;
-        });
-        _torrentStatsTimer?.cancel();
+      if (!mounted) return;
+      if (kDebugMode) {
+        debugPrint('[ValkeryPlayer/error] $err (loading: $_isInitialLoading, retry: $_openRetryCount)');
       }
+
+      // If initial loading failed and we have retries left, wait and re-open cleanly
+      if (_isInitialLoading && _openRetryCount < _maxRetries) {
+        _openRetryCount++;
+        setState(() {
+          _torrentStatusMessage = 'Búfer en curso (reintentando conexión $_openRetryCount/$_maxRetries)...';
+        });
+        Future.delayed(const Duration(milliseconds: 2000), () {
+          if (mounted && _isInitialLoading) {
+            _openStreamInPlayer();
+          }
+        });
+        return;
+      }
+
+      setState(() {
+        _playbackError = err;
+        _isInitialLoading = false;
+        _isControlsVisible = true;
+      });
+      _torrentStatsTimer?.cancel();
     });
 
     _durationSubscription = _player.stream.duration.listen((dur) {
@@ -192,6 +213,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       _playbackError = null;
       _isRetrying = false;
       _isInitialLoading = true;
+      _openRetryCount = 0;
+      _isMetadataReady = !widget.stream.isTorrent || widget.stream.infoHash.isEmpty;
+      _torrentStatusMessage = widget.stream.isTorrent
+          ? 'Conectando al enjambre de torrents y rastreadores...'
+          : 'Cargando búfer de video...';
     });
 
     _startTorrentStatsTimer();
@@ -202,12 +228,55 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         await np.setProperty('hwdec', 'auto-safe');
         await np.setProperty('demuxer-max-bytes', '256M');
         await np.setProperty('demuxer-readahead-secs', '30');
-        await np.setProperty('network-timeout', '120');
+        await np.setProperty('network-timeout', '60');
         await np.setProperty('cache', 'yes');
         await np.setProperty('stream-lavf-o', 'reconnect_streamed=1,reconnect_delay_max=5');
       }
     } catch (_) {}
 
+    if (widget.stream.isTorrent && widget.stream.infoHash.isNotEmpty) {
+      _prepareTorrentAndPlay();
+    } else {
+      _openStreamInPlayer();
+    }
+  }
+
+  Future<void> _prepareTorrentAndPlay() async {
+    final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
+    final ih = widget.stream.infoHash.toLowerCase();
+
+    // 1. Proactively tell streaming engine to attach / start peer search for this torrent
+    try {
+      final createUri = Uri.parse('$serverUrl/$ih/create');
+      final allSources = <String>{
+        ...widget.stream.sources,
+        ...StreamCandidate.defaultTrackers,
+      }.toList();
+
+      final body = jsonEncode({
+        'peerSearch': {'sources': allSources},
+      });
+
+      http.post(createUri, headers: {'Content-Type': 'application/json'}, body: body)
+          .timeout(const Duration(seconds: 4))
+          .catchError((_) => http.Response('', 500));
+    } catch (_) {}
+
+    // 2. Poll metadata readiness or wait up to 5s before opening media
+    int checks = 0;
+    while (mounted && !_isMetadataReady && checks < 8) {
+      await Future.delayed(const Duration(milliseconds: 600));
+      checks++;
+      if (_isMetadataReady || !mounted) break;
+    }
+
+    if (mounted && _isInitialLoading) {
+      _openStreamInPlayer();
+    }
+  }
+
+  Future<void> _openStreamInPlayer() async {
+    if (!mounted) return;
     final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
     final url = widget.localFilePath ??
         ((kIsWeb && !widget.stream.isWebCompatible && widget.stream.isTorrent)
@@ -215,15 +284,23 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
             : widget.stream.playbackUrlFor(serverUrl));
 
     if (kDebugMode) {
-      debugPrint('[ValkeryPlayer] Opening stream: $url');
+      debugPrint('[ValkeryPlayer] Opening stream (attempt ${_openRetryCount + 1}): $url');
     }
 
-    await _player.open(mpv.Media(url));
+    try {
+      await _player.open(mpv.Media(url));
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[ValkeryPlayer] Player.open caught exception: $e');
+      }
+    }
   }
 
   void _startTorrentStatsTimer() {
     _torrentStatsTimer?.cancel();
     if (!widget.stream.isTorrent || widget.stream.infoHash.isEmpty) return;
+
+    final ih = widget.stream.infoHash.toLowerCase();
 
     _torrentStatsTimer = Timer.periodic(const Duration(milliseconds: 900), (_) async {
       if (!mounted || !_isInitialLoading) {
@@ -236,12 +313,32 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         if (res.statusCode == 200 && mounted) {
           final decoded = jsonDecode(res.body);
           if (decoded is Map<String, dynamic>) {
-            final ihData = decoded[widget.stream.infoHash.toLowerCase()];
+            final ihData = decoded[ih];
             if (ihData is Map<String, dynamic>) {
+              final peers = int.tryParse(ihData['peers']?.toString() ?? '0') ?? 0;
+              final speed = int.tryParse(ihData['downloadSpeed']?.toString() ?? '0') ?? 0;
+              final downloaded = int.tryParse(ihData['downloaded']?.toString() ?? '0') ?? 0;
+              final files = ihData['files'];
+              final hasFiles = files is List && files.isNotEmpty;
+
               setState(() {
-                _torrentPeers = int.tryParse(ihData['peers']?.toString() ?? '0') ?? 0;
-                _torrentDownloadSpeed = int.tryParse(ihData['downloadSpeed']?.toString() ?? '0') ?? 0;
-                _torrentDownloadedBytes = int.tryParse(ihData['downloaded']?.toString() ?? '0') ?? 0;
+                _torrentPeers = peers;
+                _torrentDownloadSpeed = speed;
+                _torrentDownloadedBytes = downloaded;
+                if (hasFiles && !_isMetadataReady) {
+                  _isMetadataReady = true;
+                  _torrentStatusMessage = 'Metadatos listos. Descargando búfer de video...';
+                } else if (!_isMetadataReady) {
+                  if (peers > 0) {
+                    _torrentStatusMessage = '$peers pares conectados. Obteniendo metadatos...';
+                  } else {
+                    _torrentStatusMessage = 'Conectando al enjambre de torrents y rastreadores...';
+                  }
+                } else {
+                  _torrentStatusMessage = peers > 0
+                      ? '$peers pares activos • ${_formatSpeed(speed)}'
+                      : 'Bifurcando búfer de video...';
+                }
               });
             }
           }
@@ -593,7 +690,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                             widget.stream.isTorrent
                                 ? (_torrentPeers > 0
                                     ? '$_torrentPeers pares activos • ${_formatSpeed(_torrentDownloadSpeed)}'
-                                    : 'Conectando al enjambre de torrents y rastreadores...')
+                                    : _torrentStatusMessage)
                                 : 'Cargando búfer de video...',
                             style: TextStyle(
                               color: widget.stream.isTorrent && _torrentPeers > 0

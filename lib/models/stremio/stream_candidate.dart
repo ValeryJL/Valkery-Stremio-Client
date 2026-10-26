@@ -23,7 +23,12 @@ class StreamCandidate {
     'udp://open.demonii.com:1337/announce',
     'udp://exodus.desync.com:6969/announce',
     'udp://explodie.org:6969/announce',
-    'http://tracker.openbittorrent.com:80/announce',
+    'https://1.tracker.eu.org:443/announce',
+    'https://tracker.foreverpirates.co:443/announce',
+    'https://tracker.tamersunion.org:443/announce',
+    'http://tracker.dler.com:6969/announce',
+    'http://tracker.renfei.net:8080/announce',
+    'wss://tracker.openwebtorrent.com:443/announce',
   ];
 
   const StreamCandidate({
@@ -55,17 +60,21 @@ class StreamCandidate {
     final targetIdx = fileIdx ?? -1;
 
     final queryParts = <String>[];
-    final trList = <String>[];
+    final trSet = <String>{};
 
     for (final s in sources) {
       if (s.startsWith('tracker:')) {
-        trList.add(s.substring('tracker:'.length));
+        trSet.add(s.substring('tracker:'.length));
       } else if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('udp://')) {
-        trList.add(s);
+        trSet.add(s);
       }
     }
 
-    for (final tr in trList) {
+    // Always ensure robust default fallback trackers so streams without tracker metadata (e.g. Torrentio infohash-only)
+    // or on firewalled / DHT-blocked connections find global peers immediately.
+    trSet.addAll(defaultTrackers);
+
+    for (final tr in trSet) {
       queryParts.add('tr=${Uri.encodeQueryComponent(tr)}');
     }
 
@@ -80,17 +89,21 @@ class StreamCandidate {
     final targetIdx = fileIdx ?? -1;
 
     final queryParts = <String>[];
-    final trList = <String>[];
+    final trSet = <String>{};
 
     for (final s in sources) {
       if (s.startsWith('tracker:')) {
-        trList.add(s.substring('tracker:'.length));
+        trSet.add(s.substring('tracker:'.length));
       } else if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('udp://')) {
-        trList.add(s);
+        trSet.add(s);
       }
     }
 
-    for (final tr in trList) {
+    // Always ensure robust default fallback trackers so streams without tracker metadata (e.g. Torrentio infohash-only)
+    // or on firewalled / DHT-blocked connections find global peers immediately.
+    trSet.addAll(defaultTrackers);
+
+    for (final tr in trSet) {
       queryParts.add('tr=${Uri.encodeQueryComponent(tr)}');
     }
 
