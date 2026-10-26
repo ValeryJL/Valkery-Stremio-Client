@@ -288,12 +288,6 @@ class StremioServerProcessManager {
     _healthCheckTimer?.cancel();
     _healthCheckTimer = null;
 
-    if (!kIsWeb && Platform.isAndroid) {
-      try {
-        await _androidChannel.invokeMethod('stopDaemon');
-      } catch (_) {}
-    }
-
     final proc = _serverProcess;
     _serverProcess = null;
     if (proc != null) {

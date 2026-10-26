@@ -160,6 +160,10 @@ class MainActivity : AudioServiceFragmentActivity(), NativeVideoActivity {
                     } catch (e: Exception) {
                         Log.w("ValkeryDaemon", "Daemon output stream closed: ${e.message}")
                     }
+                    try {
+                        val code = proc.waitFor()
+                        Log.i("ValkeryDaemon", "Daemon process exited with code $code")
+                    } catch (_: Exception) {}
                 }.start()
 
                 Log.i("Valkery", "Stremio daemon started successfully from ${binary.absolutePath}")
@@ -172,6 +176,7 @@ class MainActivity : AudioServiceFragmentActivity(), NativeVideoActivity {
     }
 
     private fun stopStremioDaemon() {
+        Log.i("Valkery", "stopStremioDaemon requested")
         try {
             daemonProcess?.destroy()
         } catch (_: Exception) {}
