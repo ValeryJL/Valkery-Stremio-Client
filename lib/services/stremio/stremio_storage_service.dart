@@ -202,7 +202,6 @@ class StremioStorageService {
     _initialized = true;
     if (inMemory || kIsWeb) {
       _notifyWatchHistory();
-      _notifyLibraryFavorites();
       return;
     }
 
@@ -320,7 +319,6 @@ class StremioStorageService {
     }
 
     _notifyWatchHistory();
-    _notifyLibraryFavorites();
   }
 
   Future<void> saveUser(StremioUser? user) async {
