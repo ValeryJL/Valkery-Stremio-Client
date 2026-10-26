@@ -62,7 +62,25 @@ class StremioApiService {
       );
     }
     await _storage?.saveUser(user);
+
+    // Automatically synchronize addons and watch history from user's account
+    try {
+      await getAddonCollection(user.authKey);
+      await fetchWatchHistory(user.authKey);
+    } catch (_) {}
+
     return user;
+  }
+
+  /// Syncs addons and watch history for currently stored user session.
+  Future<void> syncAccountData() async {
+    final key = _storage?.authKey;
+    if (key != null && key.isNotEmpty) {
+      try {
+        await getAddonCollection(key);
+        await fetchWatchHistory(key);
+      } catch (_) {}
+    }
   }
 
   /// Registers a new user account on official Stremio backend.
@@ -165,11 +183,18 @@ class StremioApiService {
           .map(StremioAddon.fromJson)
           .toList();
 
-      await _storage?.saveAddons(addons);
-      return addons;
-    } catch (_) {
-      return _storage?.addons ?? const [];
-    }
+      if (addons.isNotEmpty) {
+        // Ensure default fallback addons (like Torrentio/OpenSubtitles) are retained if not present
+        for (final def in StremioAddon.defaultAddons()) {
+          if (!addons.any((a) => a.id == def.id)) {
+            addons.add(def);
+          }
+        }
+        await _storage?.saveAddons(addons);
+        return addons;
+      }
+    } catch (_) {}
+    return _storage?.addons ?? StremioAddon.defaultAddons();
   }
 
   /// Sets/synchronizes the user's addons collection on Stremio cloud account.

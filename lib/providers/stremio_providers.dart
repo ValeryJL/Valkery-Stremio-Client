@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/stremio/media_item.dart';
 import '../models/stremio/stream_candidate.dart';
+import '../models/stremio/watch_history_item.dart';
 import '../services/stremio/catalog_and_stream_service.dart';
 import '../services/stremio/stremio_api_service.dart';
 import '../services/stremio/stremio_offline_download_manager.dart';
@@ -93,3 +94,17 @@ final stremioStreamsProvider = FutureProvider.family
     );
   },
 );
+
+/// User's library and watch history from Stremio datastore.
+final stremioWatchHistoryProvider = FutureProvider.autoDispose<List<LibraryWatchState>>((ref) async {
+  final storage = ref.watch(stremioStorageProvider);
+  final api = ref.watch(stremioApiServiceProvider);
+  final key = storage.authKey;
+  if (key != null && key.isNotEmpty) {
+    try {
+      final remote = await api.fetchWatchHistory(key);
+      if (remote.isNotEmpty) return remote;
+    } catch (_) {}
+  }
+  return storage.watchHistory;
+});

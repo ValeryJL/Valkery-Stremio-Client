@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iconsax_plus/iconsax_plus.dart';
 
 import '../../models/stremio/media_item.dart';
+import '../../models/stremio/watch_history_item.dart';
 import '../../providers/stremio_providers.dart';
 import 'stremio_detail_screen.dart';
 
@@ -18,6 +19,18 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
   bool _isSearching = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(stremioApiServiceProvider).syncAccountData().then((_) {
+        if (mounted) {
+          ref.invalidate(stremioWatchHistoryProvider);
+        }
+      });
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -30,8 +43,10 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
     final topSeriesAsync = ref.watch(stremioTopSeriesProvider);
     final searchResultsAsync = ref.watch(stremioSearchResultsProvider);
     final serverStatusAsync = ref.watch(stremioServerStatusStreamProvider);
+    final watchHistoryAsync = ref.watch(stremioWatchHistoryProvider);
 
     final isServerOnline = serverStatusAsync.value?.isOnline ?? false;
+    final historyItems = watchHistoryAsync.value ?? <LibraryWatchState>[];
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -124,6 +139,8 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
           : RefreshIndicator(
               color: const Color(0xFF8B5CF6),
               onRefresh: () async {
+                await ref.read(stremioApiServiceProvider).syncAccountData();
+                ref.invalidate(stremioWatchHistoryProvider);
                 ref.invalidate(stremioTopMoviesProvider);
                 ref.invalidate(stremioTopSeriesProvider);
               },
@@ -131,6 +148,11 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 children: [
+                  if (historyItems.isNotEmpty) ...[
+                    _buildSectionHeader('Continuar Viendo / Recientes', IconsaxPlusBold.clock),
+                    _buildWatchHistoryCarousel(historyItems),
+                    const SizedBox(height: 24),
+                  ],
                   _buildSectionHeader('Películas Populares', IconsaxPlusBold.video),
                   _buildMediaCarousel(topMoviesAsync),
                   const SizedBox(height: 24),
@@ -154,6 +176,115 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWatchHistoryCarousel(List<LibraryWatchState> items) {
+    return SizedBox(
+      height: 250,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          var poster = item.poster;
+          if (poster.isEmpty && item.id.startsWith('tt')) {
+            poster = 'https://images.metahub.space/poster/medium/${item.id}/img.jpg';
+          }
+
+          final media = MediaItem(
+            id: item.id,
+            type: item.type,
+            name: item.name,
+            poster: poster,
+          );
+
+          return GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StremioDetailScreen(media: media),
+                ),
+              );
+            },
+            child: Container(
+              width: 140,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  width: 1,
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (poster.isNotEmpty)
+                          Image.network(
+                            poster,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                          )
+                        else
+                          _buildPlaceholder(),
+                        if (item.currentSeason != null && item.currentEpisode != null)
+                          Positioned(
+                            top: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF8B5CF6),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'T${item.currentSeason} E${item.currentEpisode}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (item.progressRatio > 0 && !item.isCompleted)
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: LinearProgressIndicator(
+                              value: item.progressRatio,
+                              minHeight: 4,
+                              backgroundColor: Colors.black54,
+                              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF8B5CF6)),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      item.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -218,38 +349,33 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.network(
-                    item.poster,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.black26,
-                      child: const Center(
-                        child: Icon(IconsaxPlusLinear.image, size: 36),
-                      ),
-                    ),
-                  ),
+                  if (item.poster.isNotEmpty)
+                    Image.network(
+                      item.poster,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                    )
+                  else
+                    _buildPlaceholder(),
                   Positioned(
-                    top: 6,
-                    right: 6,
+                    top: 8,
+                    right: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.65),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         item.type.toUpperCase(),
                         style: const TextStyle(
-                          fontSize: 9,
+                          fontSize: 10,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
@@ -260,7 +386,7 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(8.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -268,21 +394,14 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
                     item.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    item.releaseInfo.isNotEmpty
-                        ? item.releaseInfo
-                        : (item.genres.isNotEmpty ? item.genres.first : ''),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    item.releaseInfo,
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.white.withValues(alpha: 0.6),
+                      color: Colors.white.withValues(alpha: 0.5),
                     ),
                   ),
                 ],
@@ -294,12 +413,21 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
     );
   }
 
+  Widget _buildPlaceholder() {
+    return Container(
+      color: Colors.white.withValues(alpha: 0.05),
+      child: const Center(
+        child: Icon(IconsaxPlusLinear.video, color: Colors.white30, size: 36),
+      ),
+    );
+  }
+
   Widget _buildSearchResults(AsyncValue<List<MediaItem>> asyncResults) {
     return asyncResults.when(
       loading: () => const Center(
         child: CircularProgressIndicator(color: Color(0xFF8B5CF6)),
       ),
-      error: (e, _) => Center(child: Text('Error en la búsqueda: $e')),
+      error: (e, _) => Center(child: Text('Error en búsqueda: $e')),
       data: (items) {
         if (items.isEmpty) {
           return const Center(child: Text('No se encontraron resultados'));
@@ -310,11 +438,13 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
             maxCrossAxisExtent: 180,
             childAspectRatio: 0.62,
-            crossAxisSpacing: 14,
-            mainAxisSpacing: 14,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
           ),
           itemCount: items.length,
-          itemBuilder: (context, index) => _buildPosterCard(items[index]),
+          itemBuilder: (context, index) {
+            return _buildPosterCard(items[index]);
+          },
         );
       },
     );

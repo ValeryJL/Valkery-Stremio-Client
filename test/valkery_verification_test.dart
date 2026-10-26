@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fladder/models/stremio/media_item.dart';
 import 'package:fladder/models/stremio/stream_candidate.dart';
+import 'package:fladder/models/stremio/watch_history_item.dart';
 import 'package:fladder/providers/source_coordinator_provider.dart';
 import 'package:fladder/services/stremio/stremio_api_service.dart';
 import 'package:fladder/services/stremio/stremio_server_process_manager.dart';
@@ -8,10 +9,21 @@ import 'package:fladder/services/stremio/stremio_storage_service.dart';
 
 void main() {
   group('Valkery Stremio Suite Verification', () {
-    test('StremioStorageService initializes with default addons', () {
+    test('StremioStorageService initializes with default addons including Cinemeta and Torrentio', () {
       final storage = StremioStorageService(inMemory: true);
       expect(storage.addons.isNotEmpty, isTrue);
       expect(storage.addons.any((a) => a.name.contains('Cinemeta')), isTrue);
+      expect(storage.addons.any((a) => a.name.contains('Torrentio')), isTrue);
+      expect(storage.addons.any((a) => a.name.contains('OpenSubtitles')), isTrue);
+    });
+
+    test('LibraryWatchState provides automatic poster fallback for IMDb IDs', () {
+      final item = LibraryWatchState.fromJson({
+        'id': 'tt0111161',
+        'name': 'The Shawshank Redemption',
+        'type': 'movie',
+      });
+      expect(item.poster, equals('https://images.metahub.space/poster/medium/tt0111161/img.jpg'));
     });
 
     test('StremioServerProcessManager defaults to 127.0.0.1:11470', () {

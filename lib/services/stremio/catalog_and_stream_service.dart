@@ -154,6 +154,14 @@ class CatalogAndStreamService {
 
     final addonEndpoints = <MapEntry<String, String>>[];
 
+    // Ensure Torrentio is always queried as primary/guaranteed stream provider
+    addonEndpoints.add(
+      MapEntry(
+        'Torrentio',
+        '$torrentioBaseUrl/stream/$normalizedType/$encodedStreamId.json',
+      ),
+    );
+
     if (addons != null) {
       for (final addon in addons) {
         if (!addon.supportsResource('stream', type: normalizedType)) continue;
@@ -187,6 +195,13 @@ class CatalogAndStreamService {
       } catch (_) {
         // Ignore single addon timeout/failure.
       }
+    }
+
+    if (candidates.isEmpty) {
+      try {
+        final apibay = await searchApibay(id);
+        candidates.addAll(apibay);
+      } catch (_) {}
     }
 
     candidates.sort((a, b) {

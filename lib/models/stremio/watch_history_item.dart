@@ -138,9 +138,13 @@ class LibraryWatchState {
         : json;
 
     final id = (json['_id'] ?? json['id'] ?? '').toString();
-    final name = (json['name'] ?? 'Unknown').toString();
-    final type = (json['type'] ?? 'movie').toString();
-    final poster = (json['poster'] ?? '').toString();
+    final name = (json['name'] ?? json['meta']?['name'] ?? 'Unknown').toString();
+    final type = (json['type'] ?? json['meta']?['type'] ?? 'movie').toString();
+    var poster = (json['poster'] ?? json['meta']?['poster'] ?? '').toString();
+    if (poster.isEmpty && id.startsWith('tt')) {
+      poster = 'https://images.metahub.space/poster/medium/$id/img.jpg';
+    }
+
     final videoId =
         (state['video_id'] ?? state['videoId'] ?? json['videoId'] ?? id)
             .toString();

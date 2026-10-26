@@ -209,13 +209,33 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                       const SizedBox(height: 4),
                       Text('${storage.addons.length} addons sincronizados',
                           style: const TextStyle(fontSize: 12, color: Colors.white70)),
-                      const SizedBox(height: 10),
-                      OutlinedButton(
-                        onPressed: () async {
-                          await ref.read(stremioApiServiceProvider).logout();
-                          setState(() {});
-                        },
-                        child: const Text('Cerrar Sesión Stremio'),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          FilledButton.tonalIcon(
+                            icon: const Icon(Icons.sync, size: 16),
+                            label: const Text('Sincronizar Addons y Recientes'),
+                            onPressed: () async {
+                              await ref.read(stremioApiServiceProvider).syncAccountData();
+                              ref.invalidate(stremioWatchHistoryProvider);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Cuenta Stremio sincronizada')),
+                                );
+                              }
+                              setState(() {});
+                            },
+                          ),
+                          const SizedBox(width: 10),
+                          OutlinedButton(
+                            onPressed: () async {
+                              await ref.read(stremioApiServiceProvider).logout();
+                              ref.invalidate(stremioWatchHistoryProvider);
+                              setState(() {});
+                            },
+                            child: const Text('Cerrar Sesión'),
+                          ),
+                        ],
                       ),
                     ],
                   )
@@ -267,6 +287,9 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                                         _emailController.text,
                                         _passwordController.text,
                                       );
+                                  ref.invalidate(stremioWatchHistoryProvider);
+                                  ref.invalidate(stremioTopMoviesProvider);
+                                  ref.invalidate(stremioTopSeriesProvider);
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(

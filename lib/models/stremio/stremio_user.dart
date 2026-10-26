@@ -189,6 +189,26 @@ class StremioAddon {
         resources: ['catalog', 'meta'],
         idPrefixes: ['tt'],
       ),
+      StremioAddon(
+        id: 'community.torrentio',
+        name: 'Torrentio',
+        version: '1.0.14',
+        description: 'Multi-provider torrents and debrid stream provider',
+        transportUrl: 'https://torrentio.strem.fun/manifest.json',
+        types: ['movie', 'series', 'anime'],
+        resources: ['stream'],
+        idPrefixes: ['tt', 'kitsu'],
+      ),
+      StremioAddon(
+        id: 'org.stremio.opensubtitles-v3',
+        name: 'OpenSubtitles v3',
+        version: '1.0.0',
+        description: 'Official subtitle provider for Stremio',
+        transportUrl: 'https://opensubtitles-v3.strem.io/manifest.json',
+        types: ['movie', 'series'],
+        resources: ['subtitles'],
+        idPrefixes: ['tt'],
+      ),
     ];
   }
 }
