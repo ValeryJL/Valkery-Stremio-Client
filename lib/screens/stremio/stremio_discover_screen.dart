@@ -5,6 +5,7 @@ import 'package:iconsax_plus/iconsax_plus.dart';
 import '../../models/stremio/media_item.dart';
 import '../../models/stremio/watch_history_item.dart';
 import '../../providers/stremio_providers.dart';
+import '../../util/web_image_helper.dart';
 import 'stremio_detail_screen.dart';
 
 class StremioDiscoverScreen extends ConsumerStatefulWidget {
@@ -230,7 +231,7 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
                       children: [
                         if (poster.isNotEmpty)
                           Image.network(
-                            poster,
+                            resolveWebSafeImageUrl(poster),
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => _buildPlaceholder(),
                           )
@@ -357,7 +358,7 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
                 children: [
                   if (item.poster.isNotEmpty)
                     Image.network(
-                      item.poster,
+                      resolveWebSafeImageUrl(item.poster),
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => _buildPlaceholder(),
                     )

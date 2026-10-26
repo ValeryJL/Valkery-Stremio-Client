@@ -91,7 +91,10 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       }
     } catch (_) {}
 
-    final url = widget.localFilePath ?? widget.stream.playbackUrl;
+    final url = widget.localFilePath ??
+        ((kIsWeb && !widget.stream.isWebCompatible && widget.stream.isTorrent)
+            ? widget.stream.hlsPlaybackUrl
+            : widget.stream.playbackUrl);
     await _player.open(Media(url));
   }
 
@@ -285,7 +288,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'No se pudo reproducir este stream (${widget.stream.quality}):\n$_playbackError',
+                                  kIsWeb && _playbackError.toString().contains('no supported source')
+                                      ? 'Los navegadores web no admiten nativamente códecs MKV / 4K HDR. Usa "Abrir en VLC" o elige una fuente MP4 1080p.'
+                                      : 'No se pudo reproducir este stream (${widget.stream.quality}):\n$_playbackError',
                                   style: const TextStyle(color: Colors.white, fontSize: 12),
                                 ),
                               ),
@@ -318,12 +323,21 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                                 label: const Text('Abrir en VLC'),
                                 onPressed: () async {
                                   final ok = await ExternalPlayerLauncher.openInVlc(streamUrl);
-                                  if (!ok && context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('VLC no encontrado en el sistema. Puedes descargarlo en videolan.org'),
-                                      ),
-                                    );
+                                  if (context.mounted) {
+                                    if (kIsWeb) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Lista M3U descargada y URL copiada al portapapeles para abrir en VLC.'),
+                                          duration: Duration(seconds: 4),
+                                        ),
+                                      );
+                                    } else if (!ok) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('VLC no encontrado en el sistema. Puedes descargarlo en videolan.org'),
+                                        ),
+                                      );
+                                    }
                                   }
                                 },
                               ),

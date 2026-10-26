@@ -1,11 +1,23 @@
 services:
-  fladder:
-    #Use "fladder-rootless" for rootless docker setups, otherwise use "fladder"
-    image: ghcr.io/donutware/fladder:latest
+  valkery-stremio-web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: valkery-stremio-web:dev
+    container_name: valkery-stremio-web
+    restart: unless-stopped
     ports:
-      - 80:80
+      - "8088:8080"
+      - "11470:11470"
+    volumes:
+      - stremio-data:/root/.stremio-server
     environment:
-      - BASE_URL=https://server-url #OPTIONAL: Locks the Fladder front-end to a certain jellyfin server
+      - BASE_URL=https://server-url #OPTIONAL: Locks the front-end to a certain jellyfin server
       - SEERR_BASE_URL=https://seerr-url #OPTIONAL: Presets Seerr base URL
       - SEERR_HEADER={"key":"value"} #OPTIONAL: JSON object string of Seerr headers
-      - FLADDER_WEBPATH=/ #OPTIONAL: Configures a subpath to run Fladder at
+      - FLADDER_WEBPATH=/ #OPTIONAL: Configures a subpath to run the web client
+      - NO_CORS=1
+      - CASTING_DISABLED=1
+
+volumes:
+  stremio-data:

@@ -10,6 +10,7 @@ import '../../models/stremio/stream_candidate.dart';
 import '../../models/stremio/watch_history_item.dart';
 import '../../providers/source_coordinator_provider.dart';
 import '../../providers/stremio_providers.dart';
+import '../../util/web_image_helper.dart';
 import 'stremio_player_screen.dart';
 import 'valkery_desktop_title_bar.dart';
 
@@ -27,6 +28,7 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
   int _selectedEpisode = 1;
   bool _isSeries = false;
   bool _isOverviewExpanded = false;
+  bool _onlyWebCompatible = kIsWeb;
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _streamsKey = GlobalKey();
 
@@ -131,7 +133,7 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                       fit: StackFit.expand,
                       children: [
                         Image.network(
-                          bgUrl,
+                          resolveWebSafeImageUrl(bgUrl),
                           fit: BoxFit.cover,
                           alignment: Alignment.topCenter,
                           errorBuilder: (_, __, ___) => const SizedBox(),
@@ -344,7 +346,7 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
       ),
       clipBehavior: Clip.antiAlias,
       child: Image.network(
-        posterUrl,
+        resolveWebSafeImageUrl(posterUrl),
         width: isCompact ? 130 : 180,
         height: isCompact ? 195 : 270,
         fit: BoxFit.cover,
@@ -789,7 +791,7 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                 children: [
                   if (ep.thumbnail.isNotEmpty)
                     Image.network(
-                      ep.thumbnail,
+                      resolveWebSafeImageUrl(ep.thumbnail),
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => _buildEpisodePlaceholder(ep),
                     )
@@ -1042,15 +1044,56 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
               color: Color(0xFF8B5CF6),
             ),
             const SizedBox(width: 8),
-            Text(
-              isSeries
-                  ? 'Fuentes para Temporada $_selectedSeason • Episodio $_selectedEpisode'
-                  : 'Fuentes y Streams Disponibles',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+            Expanded(
+              child: Text(
+                isSeries
+                    ? 'Fuentes para Temporada $_selectedSeason • Episodio $_selectedEpisode'
+                    : 'Fuentes y Streams Disponibles',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // Filter chips: Web Ready vs All
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            FilterChip(
+              selected: !_onlyWebCompatible,
+              avatar: const Icon(Icons.playlist_play, size: 14, color: Colors.white70),
+              label: const Text('Todas las fuentes (VLC)'),
+              labelStyle: TextStyle(
+                fontSize: 12,
+                color: !_onlyWebCompatible ? Colors.white : Colors.white70,
+              ),
+              backgroundColor: Colors.white10,
+              selectedColor: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
+              checkmarkColor: Colors.white,
+              onSelected: (val) {
+                if (val) setState(() => _onlyWebCompatible = false);
+              },
+            ),
+            FilterChip(
+              selected: _onlyWebCompatible,
+              avatar: const Icon(Icons.language, size: 14, color: Colors.greenAccent),
+              label: const Text('Solo Web Ready (Navegador)'),
+              labelStyle: TextStyle(
+                fontSize: 12,
+                color: _onlyWebCompatible ? Colors.white : Colors.white70,
+              ),
+              backgroundColor: Colors.white10,
+              selectedColor: Colors.green.withValues(alpha: 0.35),
+              checkmarkColor: Colors.greenAccent,
+              onSelected: (val) {
+                if (val) setState(() => _onlyWebCompatible = true);
+              },
             ),
           ],
         ),
@@ -1120,13 +1163,57 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
               );
             }
 
+            final displayStreams = _onlyWebCompatible
+                ? streams.where((s) => s.isWebCompatible).toList()
+                : streams;
+
+            if (displayStreams.isEmpty && _onlyWebCompatible) {
+              return Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.2)),
+                ),
+                child: Center(
+                  child: Column(
+                    children: [
+                      const Icon(Icons.info_outline, size: 32, color: Colors.orangeAccent),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'No hay fuentes con códec nativo para navegador (MP4/H.264) para este contenido.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 13, color: Colors.white),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Hay ${streams.length} fuentes en alta definición (MKV / 4K / HDR) que puedes abrir con VLC.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 12, color: Colors.white54),
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF8B5CF6),
+                          foregroundColor: Colors.white,
+                        ),
+                        icon: const Icon(Icons.playlist_play, size: 16),
+                        label: const Text('Ver todas las fuentes (VLC)'),
+                        onPressed: () => setState(() => _onlyWebCompatible = false),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
             return ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: streams.length,
+              itemCount: displayStreams.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
-                final stream = streams[index];
+                final stream = displayStreams[index];
                 return _buildStreamTile(stream, coordinator, media);
               },
             );
@@ -1217,6 +1304,39 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
+                      ),
+                    ),
+                    // Web compatibility badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: stream.isWebCompatible
+                            ? Colors.green.withValues(alpha: 0.22)
+                            : Colors.orange.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: stream.isWebCompatible ? Colors.greenAccent : Colors.orangeAccent,
+                          width: 0.7,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            stream.isWebCompatible ? Icons.check_circle_outline : Icons.open_in_new,
+                            size: 10,
+                            color: stream.isWebCompatible ? Colors.greenAccent : Colors.orangeAccent,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            stream.isWebCompatible ? 'Web Ready' : 'VLC / Ext',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: stream.isWebCompatible ? Colors.greenAccent : Colors.orangeAccent,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     // Seeders

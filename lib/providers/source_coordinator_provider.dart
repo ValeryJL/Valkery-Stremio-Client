@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -86,7 +87,9 @@ class SourceCoordinatorNotifier extends StateNotifier<SourceCoordinatorState> {
       final jellyName = prefs.getString(_keyJellyfinName);
       final jellyVersion = prefs.getString(_keyJellyfinVersion);
       final stremioGuest = prefs.getBool(_keyStremioGuest) ?? true;
-      final serverUrl = prefs.getString(_keyStremioServer) ?? 'http://127.0.0.1:11470';
+      final defaultHost = kIsWeb ? (Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1') : '127.0.0.1';
+      final defaultServer = 'http://$defaultHost:11470';
+      final serverUrl = prefs.getString(_keyStremioServer) ?? defaultServer;
       final playerIndex = prefs.getInt(_keyPlayerType) ?? 0;
 
       state = SourceCoordinatorState(

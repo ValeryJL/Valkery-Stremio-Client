@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class StreamCandidate {
   final String title;
   final String name;
@@ -31,7 +33,38 @@ class StreamCandidate {
 
   bool get isTorrent => infoHash.isNotEmpty || magnetUri.startsWith('magnet:');
   bool get isDirectHttp => url.startsWith('http://') || url.startsWith('https://');
-  String get playbackUrl => url.isNotEmpty ? url : (infoHash.isNotEmpty ? 'http://127.0.0.1:11470/$infoHash/${fileIdx ?? 0}' : '');
+  String get playbackUrl {
+    if (url.isNotEmpty) return url;
+    if (infoHash.isEmpty) return '';
+    final host = kIsWeb ? (Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1') : '127.0.0.1';
+    return 'http://$host:11470/$infoHash/${fileIdx ?? 0}';
+  }
+
+  /// Built-in Stremio Engine HLS transcode URL (converts MKV/HEVC to browser HLS on-the-fly)
+  String get hlsPlaybackUrl {
+    if (infoHash.isEmpty) return playbackUrl;
+    final host = kIsWeb ? (Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1') : '127.0.0.1';
+    return 'http://$host:11470/$infoHash/${fileIdx ?? 0}/hls.m3u8';
+  }
+
+  /// Determines if this stream format is likely natively playable in a standard web browser without external player.
+  bool get isWebCompatible {
+    final lower = '$name $title $quality'.toLowerCase();
+    if (lower.contains('hevc') ||
+        lower.contains('x265') ||
+        lower.contains('h.265') ||
+        lower.contains('h265') ||
+        lower.contains('hdr') ||
+        lower.contains('dolby vision') ||
+        lower.contains('dovi') ||
+        lower.contains('.mkv') ||
+        lower.contains('remux') ||
+        lower.contains('2160p') ||
+        lower.contains('4k')) {
+      return false;
+    }
+    return true;
+  }
 
   int get qualityWeight {
     final q = quality.toUpperCase();
