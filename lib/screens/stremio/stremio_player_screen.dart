@@ -11,6 +11,7 @@ import '../../models/stremio/media_item.dart';
 import '../../models/stremio/stream_candidate.dart';
 import '../../models/stremio/watch_history_item.dart';
 import '../../providers/stremio_providers.dart';
+import '../../util/external_player_launcher.dart';
 import 'valkery_desktop_title_bar.dart';
 
 class StremioPlayerScreen extends ConsumerStatefulWidget {
@@ -42,12 +43,23 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   bool _isControlsVisible = true;
   Timer? _hideControlsTimer;
   String? _playbackError;
+  bool _isRetrying = false;
 
   @override
   void initState() {
     super.initState();
-    _player = Player();
-    _controller = VideoController(_player);
+    _player = Player(
+      configuration: const PlayerConfiguration(
+        title: 'Valkery',
+        bufferSize: 64 * 1024 * 1024,
+      ),
+    );
+    _controller = VideoController(
+      _player,
+      configuration: const VideoControllerConfiguration(
+        enableHardwareAcceleration: true,
+      ),
+    );
 
     _errorSubscription = _player.stream.error.listen((err) {
       if (mounted) {
@@ -58,11 +70,31 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       }
     });
 
-    final url = widget.localFilePath ?? widget.stream.playbackUrl;
-    _player.open(Media(url));
-
+    _initMpvPropertiesAndPlay();
     _startProgressSyncTimer();
     _resetHideControlsTimer();
+  }
+
+  Future<void> _initMpvPropertiesAndPlay() async {
+    setState(() {
+      _playbackError = null;
+      _isRetrying = false;
+    });
+
+    try {
+      if (_player.platform is NativePlayer) {
+        final np = _player.platform as dynamic;
+        await np.setProperty('hwdec', 'auto-safe');
+        await np.setProperty('vo', 'gpu-next');
+        await np.setProperty('tone-mapping', 'auto');
+        await np.setProperty('demuxer-max-bytes', '256M');
+        await np.setProperty('network-timeout', '120');
+        await np.setProperty('cache', 'yes');
+      }
+    } catch (_) {}
+
+    final url = widget.localFilePath ?? widget.stream.playbackUrl;
+    await _player.open(Media(url));
   }
 
   void _resetHideControlsTimer() {
@@ -163,6 +195,8 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   }
 
   Widget _buildControlsOverlay(bool isDesktopPlatform) {
+    final streamUrl = widget.localFilePath ?? widget.stream.playbackUrl;
+
     return Container(
       color: Colors.black.withValues(alpha: 0.50),
       child: Column(
@@ -233,29 +267,73 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                     ),
                   ),
 
-                  // Playback Error Banner if any
+                  // Playback Error / Codec Error Banner
                   if (_playbackError != null)
                     Container(
-                      margin: const EdgeInsets.all(16),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: Colors.red.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.redAccent),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.6)),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.error_outline, color: Colors.redAccent),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Error de reproducción: $_playbackError\nVerifica que el motor Stremio esté activo o prueba con otra fuente.',
-                              style: const TextStyle(color: Colors.white, fontSize: 12),
-                            ),
+                          Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'No se pudo reproducir este stream (${widget.stream.quality}):\n$_playbackError',
+                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                ),
+                              ),
+                            ],
                           ),
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Elegir otra', style: TextStyle(color: Colors.amberAccent)),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              // Retry button
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  side: const BorderSide(color: Colors.white38),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                icon: const Icon(Icons.refresh, size: 14),
+                                label: const Text('Reintentar búfer'),
+                                onPressed: _isRetrying ? null : () => _initMpvPropertiesAndPlay(),
+                              ),
+                              // Open in VLC / External Player
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orangeAccent.shade700,
+                                  foregroundColor: Colors.white,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                icon: const Icon(Icons.play_circle_outline, size: 14),
+                                label: const Text('Abrir en VLC'),
+                                onPressed: () async {
+                                  final ok = await ExternalPlayerLauncher.openInVlc(streamUrl);
+                                  if (!ok && context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('VLC no encontrado en el sistema. Puedes descargarlo en videolan.org'),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                              // Choose another stream
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text('Elegir otra fuente', style: TextStyle(color: Color(0xFFC4B5FD))),
+                              ),
+                            ],
                           ),
                         ],
                       ),

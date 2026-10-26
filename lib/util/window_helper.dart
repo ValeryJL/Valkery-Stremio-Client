@@ -25,28 +25,37 @@ extension WindowHelperSetup on WindowManager {
       title: packageInfo.appName.capitalize(),
     );
 
-    // Apply window chrome consistently; only skip waitUntilReadyToShow on macOS debug to avoid breaking full-screen during hot reloads.
     Future<void> applyWindowState() async {
-      if (shouldResizeAndShow) {
-        await windowManager.setSize(Size(clientSettings.size.x, clientSettings.size.y));
-        await windowManager.center();
-        await windowManager.show();
-        await windowManager.focus();
-      }
+      try {
+        if (shouldResizeAndShow) {
+          await windowManager.setSize(Size(clientSettings.size.x, clientSettings.size.y));
+          await windowManager.center();
+          await windowManager.show();
+          await windowManager.focus();
+        }
 
-      if (startupArguments.htpcMode && !isFullScreen) {
-        await windowManager.setFullScreen(true);
+        if (startupArguments.htpcMode && !isFullScreen) {
+          await windowManager.setFullScreen(true);
+        }
+      } catch (e) {
+        debugPrint('Error applying window state: $e');
       }
     }
 
-    if (isMacDebug || defaultTargetPlatform == TargetPlatform.windows) {
-      await windowManager.setBackgroundColor(options.backgroundColor!);
-      await windowManager.setSkipTaskbar(options.skipTaskbar ?? false);
-      await windowManager.setTitleBarStyle(options.titleBarStyle!);
-      await windowManager.setTitle(options.title ?? packageInfo.appName.capitalize());
+    if (isMacDebug) {
+      try {
+        await windowManager.setBackgroundColor(options.backgroundColor!);
+        await windowManager.setSkipTaskbar(options.skipTaskbar ?? false);
+        await windowManager.setTitleBarStyle(options.titleBarStyle!);
+        await windowManager.setTitle(options.title ?? packageInfo.appName.capitalize());
+      } catch (_) {}
       await applyWindowState();
     } else {
-      await windowManager.waitUntilReadyToShow(options, applyWindowState);
+      try {
+        await windowManager.waitUntilReadyToShow(options, applyWindowState);
+      } catch (_) {
+        await applyWindowState();
+      }
     }
   }
 }

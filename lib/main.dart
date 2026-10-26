@@ -1,5 +1,3 @@
-import 'package:fladder/providers/source_coordinator_provider.dart';
-import 'package:fladder/screens/stremio/valkery_main_shell.dart';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -16,6 +14,7 @@ import 'package:fladder/providers/settings/client_settings_provider.dart';
 import 'package:fladder/providers/shared_provider.dart';
 import 'package:fladder/providers/sync_provider.dart';
 import 'package:fladder/routes/auto_router.dart';
+import 'package:fladder/screens/stremio/valkery_main_shell.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
 import 'package:fladder/util/application_info.dart';
 import 'package:fladder/util/deep_link_helper.dart';
@@ -78,6 +77,7 @@ class _FladderApp extends ConsumerWidget {
         .select((value) => value.selectedLocale ?? WidgetsBinding.instance.platformDispatcher.locale));
     final scrollBehaviour = const MaterialScrollBehavior();
     final amoledOverwrite = amoledBlack ? Colors.black : null;
+
     return AdaptiveColor(
       child: (darkTheme, lightTheme) => ThemesData(
         light: lightTheme,
@@ -97,6 +97,35 @@ class _FladderApp extends ConsumerWidget {
             ),
           ),
           themeMode: themeMode,
+          scrollBehavior: scrollBehaviour.copyWith(
+            dragDevices: {
+              ...scrollBehaviour.dragDevices,
+              mouseDrag ? PointerDeviceKind.mouse : null,
+            }.nonNulls.toSet(),
+          ),
+          localizationsDelegates: FladderLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: language,
+          localeResolutionCallback: (locale, supportedLocales) {
+            const fallback = Locale('en');
+            if (locale == null) return fallback;
+            if (supportedLocales.contains(locale)) {
+              return locale;
+            }
+            final matchByLanguage = supportedLocales.firstWhere(
+              (l) => l.languageCode == locale.languageCode,
+              orElse: () => fallback,
+            );
+
+            return matchByLanguage;
+          },
+          builder: (context, child) => MediaQueryScaler(
+            child: LocalizationContextWrapper(
+              child: PipLifecycleController(child: child ?? const SizedBox.shrink()),
+              currentLocale: language,
+            ),
+            enable: ref.read(argumentsStateProvider).leanBackMode,
+          ),
           home: const ValkeryMainShell(),
         ),
       ),
