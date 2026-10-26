@@ -1,0 +1,107 @@
+name: Valkery Multiplatform CI & Release (Desktop + Mobile)
+
+on:
+  push:
+    branches: [ main, dev ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows Desktop x64 & Installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Build Windows Release
+        run: |
+          flutter build windows --release
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath Valkery-Stremio-Client-Windows-x64.zip
+      - name: Compile Inno Setup installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+        with:
+          path: windows/windows_setup.iss
+          options: /O+ /DFLADDER_VERSION="0.11.1"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Valkery-Windows-Installer
+          path: windows/Output/fladder_setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Valkery-Stremio-Client-Windows-x64
+          path: Valkery-Stremio-Client-Windows-x64.zip
+
+  build-android:
+    name: Build Android APK (Serverless Mobile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+      - name: Build Release APK
+        run: |
+          flutter pub get
+          flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Valkery-Stremio-Client-Android-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  build-linux:
+    name: Build Linux Desktop x64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux GTK build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+      - name: Build Linux Release
+        run: |
+          flutter pub get
+          flutter build linux --release
+          tar -czvf Valkery-Stremio-Client-Linux-x64.tar.gz -C build/linux/x64/release/bundle .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Valkery-Stremio-Client-Linux-x64
+          path: Valkery-Stremio-Client-Linux-x64.tar.gz
+
+  build-macos:
+    name: Build macOS Universal
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+      - name: Build macOS Release
+        run: |
+          flutter pub get
+          flutter build macos --release
+          cd build/macos/Build/Products/Release
+          zip -r ../../../../../Valkery-Stremio-Client-macOS.zip valkery_stremio_client.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Valkery-Stremio-Client-macOS
+          path: Valkery-Stremio-Client-macOS.zip
