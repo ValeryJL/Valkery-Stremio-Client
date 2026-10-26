@@ -769,6 +769,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                   overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
                   activeTrackColor: const Color(0xFF8B5CF6),
                   inactiveTrackColor: Colors.white24,
+                  secondaryActiveTrackColor: Colors.white38,
                   thumbColor: Colors.white,
                   overlayColor: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
                 ),
@@ -776,7 +777,6 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                   value: totalSec > 0 ? posSec.clamp(0.0, totalSec) : 0.0,
                   max: totalSec > 0 ? totalSec : 1.0,
                   secondaryTrackValue: totalSec > 0 ? buffSec.clamp(0.0, totalSec) : null,
-                  secondaryActiveTrackColor: Colors.white38,
                   onChanged: (val) {
                     _showControls();
                     _player.seek(Duration(seconds: val.toInt()));

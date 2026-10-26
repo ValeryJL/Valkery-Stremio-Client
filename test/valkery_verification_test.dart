@@ -3,7 +3,6 @@ import 'package:fladder/models/stremio/media_item.dart';
 import 'package:fladder/models/stremio/stream_candidate.dart';
 import 'package:fladder/models/stremio/watch_history_item.dart';
 import 'package:fladder/providers/source_coordinator_provider.dart';
-import 'package:fladder/services/stremio/stremio_api_service.dart';
 import 'package:fladder/services/stremio/stremio_server_process_manager.dart';
 import 'package:fladder/services/stremio/stremio_storage_service.dart';
 
