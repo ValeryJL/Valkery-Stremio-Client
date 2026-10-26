@@ -140,10 +140,29 @@ class MainActivity : AudioServiceFragmentActivity(), NativeVideoActivity {
             val binary = File(nativeLibDir, "libstreamserver.so")
             if (binary.exists()) {
                 binary.setExecutable(true, false)
-                val pb = ProcessBuilder(binary.absolutePath, "-p", "11470")
+                val pb = ProcessBuilder(binary.absolutePath)
+                val env = pb.environment()
+                env["HOME"] = filesDir.absolutePath
+                env["TMPDIR"] = cacheDir.absolutePath
+                env["BIND_ADDRESS"] = "127.0.0.1"
                 pb.directory(filesDir)
-                daemonProcess = pb.start()
-                Log.i("Valkery", "Stremio daemon started from ${binary.absolutePath} on port 11470")
+                pb.redirectErrorStream(true)
+                val proc = pb.start()
+                daemonProcess = proc
+
+                Thread {
+                    try {
+                        proc.inputStream.bufferedReader().useLines { lines ->
+                            lines.forEach { line ->
+                                Log.i("ValkeryDaemon", line)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w("ValkeryDaemon", "Daemon output stream closed: ${e.message}")
+                    }
+                }.start()
+
+                Log.i("Valkery", "Stremio daemon started successfully from ${binary.absolutePath}")
             } else {
                 Log.w("Valkery", "Streaming daemon binary not found at ${binary.absolutePath}")
             }

@@ -107,10 +107,10 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
     }
     final bgUrl = media.background.isNotEmpty ? media.background : posterUrl;
 
-    // Check watch history for favorite / played state
+    // Check watch history and library favorites
     final storage = ref.watch(stremioStorageProvider);
     final watchState = storage.getWatchState(media.id);
-    final isFavorite = watchState != null && watchState.timesWatched > 0;
+    final isFavorite = storage.isFavorite(media.id);
     final isPlayed = watchState != null && watchState.flaggedWatched > 0;
 
     return Scaffold(
@@ -282,8 +282,8 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                   size: 18,
                   color: isFavorite ? const Color(0xFF8B5CF6) : Colors.white70,
                 ),
-                tooltip: isFavorite ? 'En Favoritos' : 'Agregar a Favoritos',
-                onPressed: () => _toggleFavorite(media, isFavorite),
+                tooltip: isFavorite ? 'En Biblioteca de Stremio' : 'Añadir a Biblioteca',
+                onPressed: () => _toggleFavorite(media),
               ),
               IconButton(
                 icon: Icon(
@@ -1440,33 +1440,34 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
     return 'AC';
   }
 
-  Future<void> _toggleFavorite(MediaItem media, bool currentStatus) async {
+  Future<void> _toggleFavorite(MediaItem media) async {
     final storage = ref.read(stremioStorageProvider);
     final api = ref.read(stremioApiServiceProvider);
-    final key = storage.authKey;
+    final authKey = storage.authKey ?? '';
+    final wasInLib = storage.isInLibrary(media.id);
 
-    final existing = storage.getWatchState(media.id);
-    final videoId = (_isSeries && media.episodes.isNotEmpty)
-        ? '${media.id}:$_selectedSeason:$_selectedEpisode'
-        : media.id;
-
-    final updated = (existing ??
-        LibraryWatchState(
-          id: media.id,
-          name: media.name,
-          type: media.type,
-          poster: media.poster,
-          videoId: videoId,
-          lastWatched: DateTime.now().toUtc(),
-        ))
-        .copyWith(timesWatched: currentStatus ? 0 : 1);
-
-    if (key != null && key.isNotEmpty) {
-      await api.syncWatchState(key, updated);
+    if (wasInLib) {
+      await api.removeFromLibrary(authKey, media.id);
     } else {
-      await storage.upsertWatchState(updated);
+      await api.addToLibrary(authKey, media);
     }
-    setState(() {});
+    ref.invalidate(stremioWatchHistoryProvider);
+
+    if (mounted) {
+      final isNowInLib = storage.isInLibrary(media.id);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isNowInLib
+                ? 'Añadido a la biblioteca de Stremio'
+                : 'Quitado de la biblioteca de Stremio',
+          ),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      setState(() {});
+    }
   }
 
   Future<void> _togglePlayed(MediaItem media, bool currentStatus) async {

@@ -50,16 +50,18 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
     final historyItems = watchHistoryAsync.value ?? <LibraryWatchState>[];
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF0F0E17),
       appBar: AppBar(
-        backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.75),
+        backgroundColor: const Color(0xFF0F0E17),
         elevation: 0,
         title: _isSearching
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
+                style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
-                  hintText: 'Buscar películas, series o anime en Stremio...',
+                  hintText: 'Buscar películas, series o anime...',
+                  hintStyle: TextStyle(color: Colors.white54),
                   border: InputBorder.none,
                 ),
                 onSubmitted: (query) {
@@ -77,42 +79,48 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
                       color: Color(0xFF8B5CF6),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Valkery Stremio',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19),
+                  const SizedBox(width: 8),
+                  const Flexible(
+                    child: Text(
+                      'Valkery',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: isServerOnline
-                          ? Colors.green.withValues(alpha: 0.2)
-                          : Colors.orange.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isServerOnline ? Colors.green : Colors.orange,
-                        width: 0.8,
+                  Tooltip(
+                    message: isServerOnline ? 'Motor Stremio Online' : 'Motor Stremio en Espera',
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isServerOnline
+                            ? Colors.green.withValues(alpha: 0.2)
+                            : Colors.orange.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isServerOnline ? Colors.green : Colors.orange,
+                          width: 0.8,
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircleAvatar(
-                          radius: 3.5,
-                          backgroundColor:
-                              isServerOnline ? Colors.green : Colors.orange,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          isServerOnline ? 'Engine Online' : 'Engine Standby',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: isServerOnline ? Colors.green : Colors.orange,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircleAvatar(
+                            radius: 3.5,
+                            backgroundColor:
+                                isServerOnline ? Colors.green : Colors.orange,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 4),
+                          Text(
+                            isServerOnline ? 'Online' : 'Standby',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: isServerOnline ? Colors.green : Colors.orange,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

@@ -157,15 +157,21 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          body: Column(
-            children: [
-              if (isDesktopPlatform) const ValkeryDesktopTitleBar(),
-              Expanded(child: shellContent),
-            ],
+          backgroundColor: const Color(0xFF0F0E17),
+          body: SafeArea(
+            top: !isDesktopPlatform,
+            bottom: false,
+            child: Column(
+              children: [
+                if (isDesktopPlatform) const ValkeryDesktopTitleBar(),
+                Expanded(child: shellContent),
+              ],
+            ),
           ),
           bottomNavigationBar: !isDesktop
               ? NavigationBar(
-                  backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.8),
+                  backgroundColor: const Color(0xFF141326),
+                  indicatorColor: const Color(0xFF8B5CF6).withValues(alpha: 0.25),
                   selectedIndex: safeIndex,
                   onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
                   destinations: destinations,

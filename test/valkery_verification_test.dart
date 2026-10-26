@@ -107,5 +107,32 @@ void main() {
       expect(track2.displayTitle, equals('eng'));
       expect(track2.isEnglish, isTrue);
     });
+
+    test('Stremio unified library: adding and removing library items maintains proper isLibraryItem flag', () async {
+      final storage = StremioStorageService(inMemory: true);
+      await storage.init();
+
+      const movie = MediaItem(
+        id: 'tt0137523',
+        type: 'movie',
+        name: 'Fight Club',
+        poster: 'https://images.metahub.space/poster/medium/tt0137523/img.jpg',
+      );
+
+      expect(storage.isInLibrary(movie.id), isFalse);
+      expect(storage.stremioLibraryItems, isEmpty);
+
+      // Add to Library
+      await storage.addToLibrary(movie);
+      expect(storage.isInLibrary(movie.id), isTrue);
+      expect(storage.stremioLibraryItems.length, equals(1));
+      expect(storage.stremioLibraryItems.first.name, equals('Fight Club'));
+      expect(storage.stremioLibraryItems.first.toStremioDatastoreItem()['temp'], isFalse);
+
+      // Remove from Library
+      await storage.removeFromLibrary(movie.id);
+      expect(storage.isInLibrary(movie.id), isFalse);
+      expect(storage.stremioLibraryItems, isEmpty);
+    });
   });
 }

@@ -9,7 +9,7 @@ import 'stremio_detail_screen.dart';
 
 enum LibraryFilter {
   all('Todos'),
-  inProgress('Continuar viendo'),
+  inProgress('En curso'),
   movies('Películas'),
   series('Series'),
   completed('Vistos');
@@ -47,6 +47,7 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
     try {
       final api = ref.read(stremioApiServiceProvider);
       await api.syncAccountData();
+      ref.invalidate(stremioWatchHistoryProvider);
     } catch (_) {}
     if (mounted) {
       setState(() => _isSyncing = false);
@@ -56,19 +57,17 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
   List<LibraryWatchState> _filterItems(List<LibraryWatchState> items) {
     var result = items;
 
-    // Search query filter
     if (_searchQuery.trim().isNotEmpty) {
       final q = _searchQuery.trim().toLowerCase();
       result = result.where((i) => i.name.toLowerCase().contains(q)).toList();
     }
 
-    // Category / State filter
     switch (_activeFilter) {
       case LibraryFilter.all:
         break;
       case LibraryFilter.inProgress:
         result = result
-            .where((i) => i.progressRatio > 0.05 && i.progressRatio < 0.9)
+            .where((i) => i.progressRatio > 0.05 && !i.isCompleted)
             .toList();
         break;
       case LibraryFilter.movies:
@@ -87,22 +86,21 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final historyAsync = ref.watch(stremioWatchHistoryProvider);
-    final allItems = historyAsync.value ?? <LibraryWatchState>[];
-    final filteredItems = _filterItems(allItems);
+    final libraryAsync = ref.watch(stremioLibraryItemsProvider);
+    final allLibraryItems = libraryAsync.value ?? <LibraryWatchState>[];
+    final filteredItems = _filterItems(allLibraryItems);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF0F0E17),
       appBar: AppBar(
-        backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.75),
+        backgroundColor: const Color(0xFF0F0E17),
         elevation: 0,
         title: Row(
           children: [
             const Icon(IconsaxPlusBold.folder_favorite, color: Color(0xFF8B5CF6), size: 24),
             const SizedBox(width: 10),
             const Text(
-              'Mi Biblioteca',
+              'Biblioteca',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
             const SizedBox(width: 8),
@@ -145,7 +143,7 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
           children: [
             // Search & Filter header
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Column(
                 children: [
                   // Search Bar
@@ -162,7 +160,7 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
                     child: TextField(
                       controller: _searchController,
                       onChanged: (val) => setState(() => _searchQuery = val),
-                      style: const TextStyle(fontSize: 14),
+                      style: const TextStyle(fontSize: 14, color: Colors.white),
                       decoration: InputDecoration(
                         hintText: 'Filtrar biblioteca...',
                         hintStyle: TextStyle(
@@ -175,14 +173,14 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
                           color: Colors.white54,
                         ),
                         suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(IconsaxPlusLinear.close_circle, size: 18),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
-                              )
-                            : null,
+                          ? IconButton(
+                              icon: const Icon(IconsaxPlusLinear.close_circle, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : null,
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(vertical: 12),
                       ),
@@ -229,22 +227,34 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
 
             // Content Grid or Empty State
             Expanded(
-              child: filteredItems.isEmpty
-                  ? _buildEmptyState()
-                  : GridView.builder(
-                      padding: const EdgeInsets.all(16),
-                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 180,
-                        childAspectRatio: 0.62,
-                        crossAxisSpacing: 14,
-                        mainAxisSpacing: 16,
-                      ),
-                      itemCount: filteredItems.length,
-                      itemBuilder: (context, index) {
-                        final item = filteredItems[index];
-                        return _buildLibraryCard(item);
-                      },
+              child: libraryAsync.when(
+                loading: () => const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF8B5CF6)),
+                ),
+                error: (e, _) => Center(
+                  child: Text('Error al cargar biblioteca: $e', style: const TextStyle(color: Colors.white70)),
+                ),
+                data: (_) {
+                  if (filteredItems.isEmpty) {
+                    return _buildEmptyState();
+                  }
+
+                  return GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 180,
+                      childAspectRatio: 0.62,
+                      crossAxisSpacing: 14,
+                      mainAxisSpacing: 16,
                     ),
+                    itemCount: filteredItems.length,
+                    itemBuilder: (context, index) {
+                      final item = filteredItems[index];
+                      return _buildLibraryCard(item);
+                    },
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -266,7 +276,7 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                IconsaxPlusLinear.video_slash,
+                IconsaxPlusLinear.folder_favorite,
                 size: 56,
                 color: Color(0xFF8B5CF6),
               ),
@@ -275,7 +285,7 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
             Text(
               _searchQuery.isNotEmpty
                   ? 'No se encontraron resultados para "$_searchQuery"'
-                  : 'Tu biblioteca está vacía',
+                  : 'Tu biblioteca de Stremio está vacía',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 18,
@@ -287,7 +297,7 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
             Text(
               _searchQuery.isNotEmpty
                   ? 'Intenta con otro término o limpia los filtros.'
-                  : 'Guarda películas o series desde el catálogo para tenerlas siempre a mano.',
+                  : 'Añade contenido a tu biblioteca de Stremio tocando el botón de biblioteca en su ficha.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -333,7 +343,6 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Poster container with progress bar
           Expanded(
             child: Stack(
               fit: StackFit.expand,
@@ -411,31 +420,36 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
                     icon: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
+                        color: Colors.black.withValues(alpha: 0.75),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.more_vert, size: 16, color: Colors.white70),
                     ),
                     color: const Color(0xFF1F1D36),
                     onSelected: (val) async {
-                      final storage = ref.read(stremioStorageProvider);
                       final api = ref.read(stremioApiServiceProvider);
-                      final authKey = storage.authKey;
+                      final storage = ref.read(stremioStorageProvider);
+                      final authKey = storage.authKey ?? '';
 
                       if (val == 'remove') {
-                        await storage.deleteWatchState(item.id);
-                        if (authKey != null && authKey.isNotEmpty) {
-                          await api.removeFromLibrary(authKey, item.id);
+                        await api.removeFromLibrary(authKey, item.id);
+                        ref.invalidate(stremioWatchHistoryProvider);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('"${item.name}" quitado de la biblioteca'),
+                              duration: const Duration(seconds: 2),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
                         }
                       } else if (val == 'mark_watched') {
                         final updated = item.copyWith(
                           flaggedWatched: item.isCompleted ? 0 : 1,
                           timeOffset: item.isCompleted ? 0 : item.duration,
                         );
-                        await storage.upsertWatchState(updated);
-                        if (authKey != null && authKey.isNotEmpty) {
-                          await api.syncWatchState(authKey, updated);
-                        }
+                        await api.syncWatchState(authKey, updated);
+                        ref.invalidate(stremioWatchHistoryProvider);
                       }
                     },
                     itemBuilder: (ctx) => [
@@ -459,7 +473,7 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
                           children: [
                             Icon(IconsaxPlusLinear.trash, size: 18, color: Colors.redAccent),
                             SizedBox(width: 8),
-                            Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
+                            Text('Quitar de Biblioteca', style: TextStyle(color: Colors.redAccent)),
                           ],
                         ),
                       ),

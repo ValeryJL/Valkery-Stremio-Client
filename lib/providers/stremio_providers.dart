@@ -125,3 +125,9 @@ final stremioWatchHistoryProvider = FutureProvider.autoDispose<List<LibraryWatch
   }
   return storage.watchHistory;
 });
+
+/// Items that belong to the user's Stremio Library (`isLibraryItem == true`).
+final stremioLibraryItemsProvider = FutureProvider.autoDispose<List<LibraryWatchState>>((ref) async {
+  final all = await ref.watch(stremioWatchHistoryProvider.future);
+  return all.where((item) => item.isLibraryItem).toList();
+});

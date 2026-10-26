@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../../models/stremio/download_task.dart';
+import '../../models/stremio/media_item.dart';
 import '../../models/stremio/stremio_user.dart';
 import '../../models/stremio/watch_history_item.dart';
 
@@ -77,6 +78,7 @@ class StremioStorageService {
   StremioUser? _currentUser;
   List<StremioAddon> _addons = StremioAddon.defaultAddons();
   final Map<String, LibraryWatchState> _watchHistory = {};
+  final Map<String, MediaItem> _libraryFavorites = {};
   final Map<String, LibraryWatchState> _offlineSyncQueue = {};
   final Map<String, DownloadTaskItem> _downloadTasks = {};
   AppPreferences _preferences = const AppPreferences();
@@ -84,6 +86,9 @@ class StremioStorageService {
 
   final _watchHistoryController = StreamController<List<LibraryWatchState>>.broadcast();
   Stream<List<LibraryWatchState>> get watchHistoryStream => _watchHistoryController.stream;
+
+  final _libraryFavoritesController = StreamController<List<MediaItem>>.broadcast();
+  Stream<List<MediaItem>> get libraryFavoritesStream => _libraryFavoritesController.stream;
 
   StremioStorageService({
     this.inMemory = false,
@@ -116,6 +121,50 @@ class StremioStorageService {
     final list = _downloadTasks.values.toList();
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
+  }
+
+  List<LibraryWatchState> get stremioLibraryItems {
+    final list = _watchHistory.values.where((item) => item.isLibraryItem).toList();
+    list.sort((a, b) => b.lastWatched.compareTo(a.lastWatched));
+    return list;
+  }
+
+  bool isInLibrary(String mediaId) => _watchHistory[mediaId]?.isLibraryItem ?? false;
+  bool isFavorite(String mediaId) => isInLibrary(mediaId);
+
+  Future<void> addToLibrary(MediaItem item) async {
+    final existing = _watchHistory[item.id];
+    final updated = (existing ??
+        LibraryWatchState(
+          id: item.id,
+          name: item.name,
+          type: item.type,
+          poster: item.poster,
+          videoId: item.id,
+          lastWatched: DateTime.now().toUtc(),
+        ))
+        .copyWith(isLibraryItem: true);
+    await upsertWatchState(updated);
+  }
+
+  Future<void> removeFromLibrary(String mediaId) async {
+    final existing = _watchHistory[mediaId];
+    if (existing != null) {
+      if (existing.timeOffset > 0 || existing.timesWatched > 0) {
+        final updated = existing.copyWith(isLibraryItem: false);
+        await upsertWatchState(updated);
+      } else {
+        await deleteWatchState(mediaId);
+      }
+    }
+  }
+
+  Future<void> toggleFavorite(MediaItem item) async {
+    if (isInLibrary(item.id)) {
+      await removeFromLibrary(item.id);
+    } else {
+      await addToLibrary(item);
+    }
   }
 
   AppPreferences get preferences => _preferences;
@@ -153,6 +202,7 @@ class StremioStorageService {
     _initialized = true;
     if (inMemory || kIsWeb) {
       _notifyWatchHistory();
+      _notifyLibraryFavorites();
       return;
     }
 
@@ -251,11 +301,26 @@ class StremioStorageService {
           decoded['preferences'] as Map<String, dynamic>,
         );
       }
+
+      if (decoded['libraryFavorites'] is List) {
+        _libraryFavorites.clear();
+        for (final item in decoded['libraryFavorites'] as List<dynamic>) {
+          if (item is Map<String, dynamic>) {
+            try {
+              final media = MediaItem.fromJson(item);
+              if (media.id.isNotEmpty) {
+                _libraryFavorites[media.id] = media;
+              }
+            } catch (_) {}
+          }
+        }
+      }
     } catch (_) {
       // Recover gracefully with default state if JSON is corrupted.
     }
 
     _notifyWatchHistory();
+    _notifyLibraryFavorites();
   }
 
   Future<void> saveUser(StremioUser? user) async {
@@ -371,6 +436,8 @@ class StremioStorageService {
         'user': _currentUser?.toJson(),
         'addons': _addons.map((a) => a.toJson()).toList(),
         'watchHistory': _watchHistory.values.map((w) => w.toJson()).toList(),
+        'libraryFavorites':
+            _libraryFavorites.values.map((m) => m.toJson()).toList(),
         'offlineSyncQueue':
             _offlineSyncQueue.values.map((w) => w.toJson()).toList(),
         'downloadTasks': _downloadTasks.values.map((t) => t.toJson()).toList(),
@@ -386,5 +453,6 @@ class StremioStorageService {
 
   Future<void> dispose() async {
     await _watchHistoryController.close();
+    await _libraryFavoritesController.close();
   }
 }

@@ -85,3 +85,6 @@ android/build/reports/problems/
 
 
 build_output/
+
+release_binaries/
+stream-server.exe

@@ -95,18 +95,27 @@ class _FladderApp extends ConsumerWidget {
         child: MaterialApp(
           title: 'Valkery',
           debugShowCheckedModeBanner: false,
-          theme: lightTheme,
-          darkTheme: darkTheme.copyWith(
-            scaffoldBackgroundColor: amoledOverwrite,
-            cardColor: amoledOverwrite,
-            canvasColor: amoledOverwrite,
+          theme: darkTheme.copyWith(
+            scaffoldBackgroundColor: amoledOverwrite ?? const Color(0xFF0F0E17),
+            cardColor: amoledOverwrite ?? const Color(0xFF16152B),
+            canvasColor: amoledOverwrite ?? const Color(0xFF0F0E17),
             colorScheme: darkTheme.colorScheme.copyWith(
-              surface: amoledOverwrite,
-              surfaceContainerHighest: amoledOverwrite,
-              surfaceContainerLow: amoledOverwrite,
+              surface: amoledOverwrite ?? const Color(0xFF141326),
+              surfaceContainerHighest: amoledOverwrite ?? const Color(0xFF1E1D38),
+              surfaceContainerLow: amoledOverwrite ?? const Color(0xFF0F0E17),
             ),
           ),
-          themeMode: themeMode,
+          darkTheme: darkTheme.copyWith(
+            scaffoldBackgroundColor: amoledOverwrite ?? const Color(0xFF0F0E17),
+            cardColor: amoledOverwrite ?? const Color(0xFF16152B),
+            canvasColor: amoledOverwrite ?? const Color(0xFF0F0E17),
+            colorScheme: darkTheme.colorScheme.copyWith(
+              surface: amoledOverwrite ?? const Color(0xFF141326),
+              surfaceContainerHighest: amoledOverwrite ?? const Color(0xFF1E1D38),
+              surfaceContainerLow: amoledOverwrite ?? const Color(0xFF0F0E17),
+            ),
+          ),
+          themeMode: ThemeMode.dark,
           scrollBehavior: scrollBehaviour.copyWith(
             dragDevices: {
               ...scrollBehaviour.dragDevices,

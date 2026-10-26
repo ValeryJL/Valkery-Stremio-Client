@@ -11,6 +11,7 @@ class LibraryWatchState {
   final List<String> watchedEpisodes;
   final DateTime lastWatched;
   final bool pendingOfflineSync;
+  final bool isLibraryItem;
 
   const LibraryWatchState({
     required this.id,
@@ -25,6 +26,7 @@ class LibraryWatchState {
     this.watchedEpisodes = const [],
     required this.lastWatched,
     this.pendingOfflineSync = false,
+    this.isLibraryItem = false,
   });
 
   double get progressRatio {
@@ -64,6 +66,7 @@ class LibraryWatchState {
     List<String>? watchedEpisodes,
     DateTime? lastWatched,
     bool? pendingOfflineSync,
+    bool? isLibraryItem,
   }) {
     return LibraryWatchState(
       id: id ?? this.id,
@@ -78,6 +81,7 @@ class LibraryWatchState {
       watchedEpisodes: watchedEpisodes ?? this.watchedEpisodes,
       lastWatched: lastWatched ?? this.lastWatched,
       pendingOfflineSync: pendingOfflineSync ?? this.pendingOfflineSync,
+      isLibraryItem: isLibraryItem ?? this.isLibraryItem,
     );
   }
 
@@ -96,7 +100,7 @@ class LibraryWatchState {
       'poster': poster,
       'posterShape': 'poster',
       'removed': false,
-      'temp': false,
+      'temp': !isLibraryItem,
       '_ctime': isoNow,
       '_mtime': isoNow,
       'state': {
@@ -129,6 +133,7 @@ class LibraryWatchState {
       'watchedEpisodes': watchedEpisodes,
       'lastWatched': lastWatched.toUtc().toIso8601String(),
       'pendingOfflineSync': pendingOfflineSync,
+      'isLibraryItem': isLibraryItem,
     };
   }
 
@@ -189,6 +194,12 @@ class LibraryWatchState {
         ? (DateTime.tryParse(rawLastWatched) ?? DateTime.now().toUtc())
         : DateTime.now().toUtc();
 
+    final isTemp = json['temp'] == true;
+    final isRemoved = json['removed'] == true;
+    final isLibraryItem = json.containsKey('isLibraryItem')
+        ? json['isLibraryItem'] == true
+        : (!isTemp && !isRemoved);
+
     return LibraryWatchState(
       id: id,
       name: name,
@@ -202,6 +213,7 @@ class LibraryWatchState {
       watchedEpisodes: watchedEpisodes,
       lastWatched: lastWatched,
       pendingOfflineSync: json['pendingOfflineSync'] == true,
+      isLibraryItem: isLibraryItem,
     );
   }
 }

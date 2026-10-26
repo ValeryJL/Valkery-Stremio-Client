@@ -379,26 +379,33 @@ class StremioApiService {
 
   /// Adds a media item to the user's Stremio library.
   Future<bool> addToLibrary(String authKey, MediaItem item) async {
-    final watchState = LibraryWatchState(
-      id: item.id,
-      name: item.name,
-      type: item.type,
-      poster: item.poster,
-      videoId: item.id,
-      timeOffset: 0,
-      duration: 1,
-      timesWatched: 0,
-      flaggedWatched: 0,
-      watchedEpisodes: const [],
-      lastWatched: DateTime.now().toUtc(),
-      pendingOfflineSync: false,
-    );
+    final storage = _storage;
+    final existing = storage?.getWatchState(item.id);
+    final watchState = (existing ??
+        LibraryWatchState(
+          id: item.id,
+          name: item.name,
+          type: item.type,
+          poster: item.poster,
+          videoId: item.id,
+          timeOffset: 0,
+          duration: 1,
+          timesWatched: 0,
+          flaggedWatched: 0,
+          watchedEpisodes: const [],
+          lastWatched: DateTime.now().toUtc(),
+          pendingOfflineSync: false,
+        ))
+        .copyWith(isLibraryItem: true);
+
+    await storage?.upsertWatchState(watchState);
+    if (authKey.trim().isEmpty) return true;
     return syncWatchState(authKey, watchState);
   }
 
   /// Removes an item from the user's Stremio library (`removed: true` via datastorePut).
   Future<bool> removeFromLibrary(String authKey, String itemId) async {
-    await _storage?.deleteWatchState(itemId);
+    await _storage?.removeFromLibrary(itemId);
     if (authKey.trim().isEmpty) return true;
 
     try {
