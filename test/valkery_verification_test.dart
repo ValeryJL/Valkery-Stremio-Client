@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:fladder/models/stremio/media_item.dart';
 import 'package:fladder/models/stremio/stream_candidate.dart';
 import 'package:fladder/models/stremio/watch_history_item.dart';
@@ -74,6 +78,35 @@ void main() {
         torrent.hlsPlaybackUrlFor('http://example.com:11470'),
         equals('http://example.com:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/0/hls.m3u8'),
       );
+
+      // Verify null fileIdx uses -1 for automatic largest video selection
+      const autoTorrent = StreamCandidate(
+        title: 'Movie',
+        name: 'Torrentio',
+        infoHash: 'dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c',
+      );
+      expect(
+        autoTorrent.playbackUrl,
+        equals('http://127.0.0.1:11470/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/-1'),
+      );
+
+      // Verify sources are cleanly passed as tr= and never f=
+      const torrentWithSources = StreamCandidate(
+        title: 'Movie with trackers',
+        name: 'Torrentio',
+        infoHash: 'dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c',
+        fileIdx: 1,
+        behaviorHints: {'filename': 'movie.mp4'},
+        sources: [
+          'tracker:udp://tracker.opentrackr.org:1337/announce',
+          'udp://open.stealth.si:80/announce',
+        ],
+      );
+      final playUrl = torrentWithSources.playbackUrl;
+      expect(playUrl, contains('/dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c/1?'));
+      expect(playUrl, contains('tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce'));
+      expect(playUrl, contains('tr=udp%3A%2F%2Fopen.stealth.si%3A80%2Fannounce'));
+      expect(playUrl.contains('f='), isFalse);
     });
 
     test('MediaItem model parses and provides releaseInfo fallback', () {
@@ -133,6 +166,31 @@ void main() {
       await storage.removeFromLibrary(movie.id);
       expect(storage.isInLibrary(movie.id), isFalse);
       expect(storage.stremioLibraryItems, isEmpty);
+    });
+
+    test('Stremio unified library migrates legacy libraryFavorites', () async {
+      final tempDir = await Directory.systemTemp.createTemp('valkery_test_');
+      final stateFile = File(p.join(tempDir.path, 'state.json'));
+      final legacyPayload = {
+        'libraryFavorites': [
+          {
+            'id': 'tt0068646',
+            'name': 'The Godfather',
+            'type': 'movie',
+            'poster': 'https://images.metahub.space/poster/medium/tt0068646/img.jpg',
+          }
+        ]
+      };
+      await stateFile.writeAsString(jsonEncode(legacyPayload));
+
+      final storage = StremioStorageService(customFilePath: stateFile.path);
+      await storage.init();
+
+      expect(storage.isInLibrary('tt0068646'), isTrue);
+      expect(storage.stremioLibraryItems.length, equals(1));
+      expect(storage.stremioLibraryItems.first.name, equals('The Godfather'));
+
+      await tempDir.delete(recursive: true);
     });
   });
 }

@@ -48,7 +48,6 @@ class StreamCandidate {
 
   /// Resolves the stream playback URL dynamically against a specified Stremio streaming server.
   /// If fileIdx is not specified, passes -1 so rivulet-engine automatically picks the largest video file.
-  /// Also transmits all trackers (tr) and filename filter (f) as query parameters for instant swarm bootstrapping.
   String playbackUrlFor(String serverBaseUrl) {
     if (url.isNotEmpty) return url;
     if (infoHash.isEmpty) return '';
@@ -65,19 +64,9 @@ class StreamCandidate {
         trList.add(s);
       }
     }
-    for (final defTr in defaultTrackers) {
-      if (!trList.contains(defTr)) {
-        trList.add(defTr);
-      }
-    }
 
     for (final tr in trList) {
       queryParts.add('tr=${Uri.encodeQueryComponent(tr)}');
-    }
-
-    final filename = behaviorHints['filename'];
-    if (filename != null && filename.toString().trim().isNotEmpty) {
-      queryParts.add('f=${Uri.encodeQueryComponent(filename.toString().trim())}');
     }
 
     final qs = queryParts.isNotEmpty ? '?${queryParts.join('&')}' : '';
@@ -98,11 +87,6 @@ class StreamCandidate {
         trList.add(s.substring('tracker:'.length));
       } else if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('udp://')) {
         trList.add(s);
-      }
-    }
-    for (final defTr in defaultTrackers) {
-      if (!trList.contains(defTr)) {
-        trList.add(defTr);
       }
     }
 

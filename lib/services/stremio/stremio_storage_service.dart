@@ -133,6 +133,7 @@ class StremioStorageService {
   bool isFavorite(String mediaId) => isInLibrary(mediaId);
 
   Future<void> addToLibrary(MediaItem item) async {
+    _libraryFavorites[item.id] = item;
     final existing = _watchHistory[item.id];
     final updated = (existing ??
         LibraryWatchState(
@@ -148,6 +149,7 @@ class StremioStorageService {
   }
 
   Future<void> removeFromLibrary(String mediaId) async {
+    _libraryFavorites.remove(mediaId);
     final existing = _watchHistory[mediaId];
     if (existing != null) {
       if (existing.timeOffset > 0 || existing.timesWatched > 0) {
@@ -312,6 +314,24 @@ class StremioStorageService {
               }
             } catch (_) {}
           }
+        }
+      }
+
+      // Migrate legacy favorites into _watchHistory with isLibraryItem: true
+      for (final fav in _libraryFavorites.values) {
+        final existing = _watchHistory[fav.id];
+        if (existing == null) {
+          _watchHistory[fav.id] = LibraryWatchState(
+            id: fav.id,
+            name: fav.name,
+            type: fav.type,
+            poster: fav.poster,
+            videoId: fav.id,
+            lastWatched: DateTime.now().toUtc(),
+            isLibraryItem: true,
+          );
+        } else if (!existing.isLibraryItem) {
+          _watchHistory[fav.id] = existing.copyWith(isLibraryItem: true);
         }
       }
     } catch (_) {

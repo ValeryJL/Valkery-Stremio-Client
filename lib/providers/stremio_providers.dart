@@ -109,25 +109,33 @@ final stremioWatchHistoryStreamProvider = StreamProvider.autoDispose<List<Librar
 });
 
 /// User's library and watch history from Stremio datastore, updated reactively.
-final stremioWatchHistoryProvider = FutureProvider.autoDispose<List<LibraryWatchState>>((ref) async {
+final stremioWatchHistoryProvider = StreamProvider.autoDispose<List<LibraryWatchState>>((ref) async* {
   final storage = ref.watch(stremioStorageProvider);
   final api = ref.watch(stremioApiServiceProvider);
 
-  // Subscribe to live stream updates so this provider re-evaluates reactively
-  ref.watch(stremioWatchHistoryStreamProvider);
+  // 1. Immediately yield local storage state so UI renders with zero delay
+  yield storage.watchHistory;
 
+  // 2. In background, if logged in, sync with remote Stremio datastore
   final key = storage.authKey;
   if (key != null && key.isNotEmpty) {
     try {
       final remote = await api.fetchWatchHistory(key);
-      if (remote.isNotEmpty) return remote;
+      if (remote.isNotEmpty) {
+        yield remote;
+      }
     } catch (_) {}
   }
-  return storage.watchHistory;
+
+  // 3. Emit any subsequent updates from local mutations or datastore sync
+  yield* storage.watchHistoryStream;
 });
 
 /// Items that belong to the user's Stremio Library (`isLibraryItem == true`).
-final stremioLibraryItemsProvider = FutureProvider.autoDispose<List<LibraryWatchState>>((ref) async {
-  final all = await ref.watch(stremioWatchHistoryProvider.future);
-  return all.where((item) => item.isLibraryItem).toList();
+final stremioLibraryItemsProvider = Provider.autoDispose<AsyncValue<List<LibraryWatchState>>>((ref) {
+  final historyAsync = ref.watch(stremioWatchHistoryProvider);
+  final storage = ref.watch(stremioStorageProvider);
+
+  final items = historyAsync.value ?? storage.stremioLibraryItems;
+  return AsyncData(items.where((item) => item.isLibraryItem).toList());
 });
