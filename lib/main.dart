@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:fladder/bootstrap/app_bootstrap.dart';
 import 'package:fladder/bootstrap/platform/platform_app_wrapper.dart';
@@ -13,8 +14,10 @@ import 'package:fladder/providers/crash_log_provider.dart';
 import 'package:fladder/providers/settings/client_settings_provider.dart';
 import 'package:fladder/providers/shared_provider.dart';
 import 'package:fladder/providers/sync_provider.dart';
+import 'package:fladder/providers/stremio_providers.dart';
 import 'package:fladder/routes/auto_router.dart';
 import 'package:fladder/screens/stremio/valkery_main_shell.dart';
+import 'package:fladder/services/stremio/stremio_storage_service.dart';
 import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
 import 'package:fladder/util/application_info.dart';
 import 'package:fladder/util/deep_link_helper.dart';
@@ -30,6 +33,12 @@ void main(List<String> args) async {
 
   final bootstrap = await bootstrapApplication(args);
 
+  final storagePath = bootstrap.applicationDirectory.path.isNotEmpty
+      ? p.join(bootstrap.applicationDirectory.path, 'valkery_stremio_state.json')
+      : null;
+  final stremioStorage = StremioStorageService(customFilePath: storagePath);
+  await stremioStorage.init();
+
   runApp(
     ProviderScope(
       overrides: [
@@ -38,6 +47,7 @@ void main(List<String> args) async {
         crashLogProvider.overrideWith((ref) => bootstrap.crashProvider),
         argumentsStateProvider.overrideWith((ref) => bootstrap.argumentsModel),
         syncProvider.overrideWith((ref) => SyncNotifier(ref, bootstrap.applicationDirectory)),
+        stremioStorageProvider.overrideWith((ref) => stremioStorage),
       ],
       child: AdaptiveLayoutBuilder(
         child: (context) => const Main(),

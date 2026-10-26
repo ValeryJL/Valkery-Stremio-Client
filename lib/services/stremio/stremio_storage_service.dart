@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -81,6 +82,9 @@ class StremioStorageService {
   AppPreferences _preferences = const AppPreferences();
   bool _initialized = false;
 
+  final _watchHistoryController = StreamController<List<LibraryWatchState>>.broadcast();
+  Stream<List<LibraryWatchState>> get watchHistoryStream => _watchHistoryController.stream;
+
   StremioStorageService({
     this.inMemory = false,
     this.customFilePath,
@@ -116,6 +120,12 @@ class StremioStorageService {
 
   AppPreferences get preferences => _preferences;
 
+  void _notifyWatchHistory() {
+    if (!_watchHistoryController.isClosed) {
+      _watchHistoryController.add(watchHistory);
+    }
+  }
+
   String get resolvedStorageFilePath {
     if (kIsWeb) return '/valkery_state.json';
     if (customFilePath != null && customFilePath!.trim().isNotEmpty) {
@@ -141,18 +151,46 @@ class StremioStorageService {
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
-    if (inMemory || kIsWeb) return;
+    if (inMemory || kIsWeb) {
+      _notifyWatchHistory();
+      return;
+    }
 
     try {
       final file = File(resolvedStorageFilePath);
       if (!await file.exists()) {
+        try {
+          final legacyHome = Platform.environment['USERPROFILE'] ??
+              Platform.environment['HOME'];
+          if (legacyHome != null) {
+            final legacyFile = File(p.join(legacyHome, '.valkery_stremio', 'state.json'));
+            if (await legacyFile.exists()) {
+              final legacyRaw = await legacyFile.readAsString();
+              if (legacyRaw.trim().isNotEmpty) {
+                await file.parent.create(recursive: true);
+                await file.writeAsString(legacyRaw);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!await file.exists()) {
         await _persist();
+        _notifyWatchHistory();
         return;
       }
+
       final raw = await file.readAsString();
-      if (raw.trim().isEmpty) return;
+      if (raw.trim().isEmpty) {
+        _notifyWatchHistory();
+        return;
+      }
       final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return;
+      if (decoded is! Map<String, dynamic>) {
+        _notifyWatchHistory();
+        return;
+      }
 
       if (decoded['user'] is Map<String, dynamic>) {
         _currentUser = StremioUser.fromJson(
@@ -216,6 +254,8 @@ class StremioStorageService {
     } catch (_) {
       // Recover gracefully with default state if JSON is corrupted.
     }
+
+    _notifyWatchHistory();
   }
 
   Future<void> saveUser(StremioUser? user) async {
@@ -265,6 +305,7 @@ class StremioStorageService {
       _offlineSyncQueue[updated.id] = updated;
     }
     await _persist();
+    _notifyWatchHistory();
   }
 
   Future<void> mergeRemoteWatchHistory(List<LibraryWatchState> remoteItems) async {
@@ -278,6 +319,7 @@ class StremioStorageService {
       }
     }
     await _persist();
+    _notifyWatchHistory();
   }
 
   Future<void> enqueueOfflineWatchSync(LibraryWatchState state) async {
@@ -285,6 +327,7 @@ class StremioStorageService {
     _watchHistory[flagged.id] = flagged;
     _offlineSyncQueue[flagged.id] = flagged;
     await _persist();
+    _notifyWatchHistory();
   }
 
   Future<void> markOfflineWatchSynced(String mediaId) async {
@@ -294,12 +337,14 @@ class StremioStorageService {
       _watchHistory[mediaId] = existing.copyWith(pendingOfflineSync: false);
     }
     await _persist();
+    _notifyWatchHistory();
   }
 
   Future<void> deleteWatchState(String mediaId) async {
     _watchHistory.remove(mediaId);
     _offlineSyncQueue.remove(mediaId);
     await _persist();
+    _notifyWatchHistory();
   }
 
   Future<void> upsertDownloadTask(DownloadTaskItem task) async {
@@ -337,5 +382,9 @@ class StremioStorageService {
     } catch (_) {
       // Ignore write failures in read-only sandboxed test environments.
     }
+  }
+
+  Future<void> dispose() async {
+    await _watchHistoryController.close();
   }
 }

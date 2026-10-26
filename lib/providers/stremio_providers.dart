@@ -102,10 +102,20 @@ final stremioStreamsProvider = FutureProvider.family
   },
 );
 
-/// User's library and watch history from Stremio datastore.
+/// Real-time stream of user's watch history and library items.
+final stremioWatchHistoryStreamProvider = StreamProvider.autoDispose<List<LibraryWatchState>>((ref) {
+  final storage = ref.watch(stremioStorageProvider);
+  return storage.watchHistoryStream;
+});
+
+/// User's library and watch history from Stremio datastore, updated reactively.
 final stremioWatchHistoryProvider = FutureProvider.autoDispose<List<LibraryWatchState>>((ref) async {
   final storage = ref.watch(stremioStorageProvider);
   final api = ref.watch(stremioApiServiceProvider);
+
+  // Subscribe to live stream updates so this provider re-evaluates reactively
+  ref.watch(stremioWatchHistoryStreamProvider);
+
   final key = storage.authKey;
   if (key != null && key.isNotEmpty) {
     try {

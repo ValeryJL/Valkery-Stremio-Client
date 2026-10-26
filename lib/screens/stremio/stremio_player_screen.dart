@@ -78,6 +78,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   // Focus node for keyboard shortcuts
   final FocusNode _focusNode = FocusNode();
 
+  StreamSubscription<bool>? _playingSubscription;
+  StreamSubscription<bool>? _completedSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -112,6 +115,36 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           _audioTracks = tracks.audio;
           _currentSubtitleTrack = _player.state.track.subtitle;
           _currentAudioTrack = _player.state.track.audio;
+        });
+      }
+    });
+
+    _playingSubscription = _player.stream.playing.listen((isPlaying) {
+      if (!isPlaying) {
+        _savePlaybackProgress();
+      }
+    });
+
+    _completedSubscription = _player.stream.completed.listen((completed) {
+      if (completed) {
+        _savePlaybackProgress(isCompleted: true);
+      }
+    });
+
+    // Auto-resume from saved playback progress
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final saved = ref.read(stremioStorageProvider).getWatchState(widget.media.id);
+      if (saved != null && saved.timeOffset > 10 && saved.duration > 0 && (saved.timeOffset < (saved.duration * 0.92))) {
+        Future.delayed(const Duration(milliseconds: 1600), () {
+          if (mounted && _player.state.duration.inSeconds > 0) {
+            _player.seek(Duration(seconds: saved.timeOffset));
+            final min = saved.timeOffset ~/ 60;
+            final sec = saved.timeOffset % 60;
+            _showIndicator(
+              'Reanudando en ${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}',
+              IconsaxPlusBold.play,
+            );
+          }
         });
       }
     });
@@ -301,59 +334,68 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     }
   }
 
-  void _startProgressSyncTimer() {
-    _progressSyncTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      final position = _player.state.position.inSeconds;
-      final duration = _player.state.duration.inSeconds;
+  Future<void> _savePlaybackProgress({bool isCompleted = false}) async {
+    final position = _player.state.position.inSeconds;
+    final duration = _player.state.duration.inSeconds;
 
-      if (position > 0 && duration > 0) {
-        final storage = ref.read(stremioStorageProvider);
-        final api = ref.read(stremioApiServiceProvider);
-        final authKey = storage.authKey;
+    if (position > 0 && duration > 0) {
+      final storage = ref.read(stremioStorageProvider);
+      final api = ref.read(stremioApiServiceProvider);
+      final authKey = storage.authKey;
 
-        final videoId = (widget.season != null && widget.episode != null)
-            ? '${widget.media.id}:${widget.season}:${widget.episode}'
-            : widget.media.id;
+      final videoId = (widget.season != null && widget.episode != null)
+          ? '${widget.media.id}:${widget.season}:${widget.episode}'
+          : widget.media.id;
 
-        final completed = (position / duration) >= 0.9;
-        final existing = storage.getWatchState(widget.media.id);
-        final watchedList = <String>{
-          if (existing != null) ...existing.watchedEpisodes,
-          if (completed) videoId,
-        }.toList();
+      final completed = isCompleted || (position / duration) >= 0.9;
+      final existing = storage.getWatchState(widget.media.id);
+      final watchedList = <String>{
+        if (existing != null) ...existing.watchedEpisodes,
+        if (completed) videoId,
+      }.toList();
 
-        final watchState = LibraryWatchState(
-          id: widget.media.id,
-          name: widget.media.name,
-          type: widget.media.type,
-          poster: widget.media.poster,
-          videoId: videoId,
-          timeOffset: position,
-          duration: duration,
-          timesWatched: completed
-              ? ((existing?.timesWatched ?? 0) + 1)
-              : (existing?.timesWatched ?? 0),
-          flaggedWatched: completed ? 1 : (existing?.flaggedWatched ?? 0),
-          watchedEpisodes: watchedList,
-          lastWatched: DateTime.now().toUtc(),
-        );
+      final watchState = LibraryWatchState(
+        id: widget.media.id,
+        name: widget.media.name,
+        type: widget.media.type,
+        poster: widget.media.poster,
+        videoId: videoId,
+        timeOffset: completed ? 0 : position,
+        duration: duration,
+        timesWatched: completed
+            ? ((existing?.timesWatched ?? 0) + 1)
+            : (existing?.timesWatched ?? 0),
+        flaggedWatched: completed ? 1 : (existing?.flaggedWatched ?? 0),
+        watchedEpisodes: watchedList,
+        lastWatched: DateTime.now().toUtc(),
+      );
 
-        if (authKey != null && authKey.isNotEmpty) {
+      await storage.upsertWatchState(watchState);
+
+      if (authKey != null && authKey.isNotEmpty) {
+        try {
           await api.syncWatchState(authKey, watchState);
-        } else {
-          await storage.upsertWatchState(watchState);
-        }
+        } catch (_) {}
       }
+    }
+  }
+
+  void _startProgressSyncTimer() {
+    _progressSyncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _savePlaybackProgress();
     });
   }
 
   @override
   void dispose() {
+    _savePlaybackProgress();
     _hideControlsTimer?.cancel();
     _progressSyncTimer?.cancel();
     _indicatorTimer?.cancel();
     _errorSubscription?.cancel();
     _tracksSubscription?.cancel();
+    _playingSubscription?.cancel();
+    _completedSubscription?.cancel();
     _focusNode.dispose();
     _player.dispose();
     super.dispose();
@@ -364,7 +406,12 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     final isDesktopPlatform =
         !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
-    return KeyboardListener(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        _savePlaybackProgress();
+      },
+      child: KeyboardListener(
       focusNode: _focusNode,
       autofocus: true,
       onKeyEvent: _handleKeyEvent,
@@ -490,7 +537,8 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildControlsOverlay(bool isDesktopPlatform) {
@@ -528,7 +576,12 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
               IconButton(
                 tooltip: 'Volver',
                 icon: const Icon(IconsaxPlusLinear.arrow_left, color: Colors.white, size: 24),
-                onPressed: () => Navigator.of(context).maybePop(),
+                onPressed: () async {
+                  await _savePlaybackProgress();
+                  if (context.mounted) {
+                    Navigator.of(context).maybePop();
+                  }
+                },
               ),
               const SizedBox(width: 8),
               Expanded(

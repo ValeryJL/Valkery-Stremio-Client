@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../providers/source_coordinator_provider.dart';
 import 'stremio_discover_screen.dart';
+import 'stremio_library_screen.dart';
 import 'stremio_offline_screen.dart';
 import 'valkery_desktop_title_bar.dart';
 import 'valkery_jellyfin_view.dart';
@@ -33,6 +34,9 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
 
     final screens = <Widget>[
       const StremioDiscoverScreen(),
+      StremioLibraryScreen(
+        onExploreCatalog: () => setState(() => _currentIndex = 0),
+      ),
       const StremioOfflineScreen(),
       if (coordinator.isJellyfinActive)
         const ValkeryJellyfinView(),
@@ -43,11 +47,16 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
       const NavigationDestination(
         icon: Icon(IconsaxPlusLinear.discover),
         selectedIcon: Icon(IconsaxPlusBold.discover, color: Color(0xFF8B5CF6)),
-        label: 'Stremio',
+        label: 'Explorar',
       ),
       const NavigationDestination(
         icon: Icon(IconsaxPlusLinear.folder_favorite),
         selectedIcon: Icon(IconsaxPlusBold.folder_favorite, color: Color(0xFF8B5CF6)),
+        label: 'Biblioteca',
+      ),
+      const NavigationDestination(
+        icon: Icon(IconsaxPlusLinear.document_download),
+        selectedIcon: Icon(IconsaxPlusBold.document_download, color: Color(0xFF8B5CF6)),
         label: 'Offline',
       ),
       if (coordinator.isJellyfinActive)
@@ -91,12 +100,18 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
               const NavigationRailDestination(
                 icon: Icon(IconsaxPlusLinear.discover),
                 selectedIcon: Icon(IconsaxPlusBold.discover, color: Color(0xFF8B5CF6)),
-                label: Text('Stremio'),
+                label: Text('Explorar'),
               ),
               const NavigationRailDestination(
                 icon: Icon(IconsaxPlusLinear.folder_favorite),
                 selectedIcon:
                     Icon(IconsaxPlusBold.folder_favorite, color: Color(0xFF8B5CF6)),
+                label: Text('Biblioteca'),
+              ),
+              const NavigationRailDestination(
+                icon: Icon(IconsaxPlusLinear.document_download),
+                selectedIcon:
+                    Icon(IconsaxPlusBold.document_download, color: Color(0xFF8B5CF6)),
                 label: Text('Offline'),
               ),
               if (coordinator.isJellyfinActive)

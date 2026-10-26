@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:iconsax_plus/iconsax_plus.dart';
 
+import '../../models/stremio/stremio_user.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/source_coordinator_provider.dart';
 import '../../providers/stremio_providers.dart';
@@ -22,7 +23,12 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
   late final TextEditingController _jellyfinServerController;
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _authKeyController = TextEditingController();
+  final TextEditingController _addonUrlController = TextEditingController();
+
+  int _stremioAuthTab = 0; // 0: Login, 1: Register, 2: AuthKey
   bool _isLoggingIn = false;
+  bool _isInstallingAddon = false;
   bool _isTestingJellyfin = false;
   String? _jellyfinError;
 
@@ -40,7 +46,131 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
     _jellyfinServerController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _authKeyController.dispose();
+    _addonUrlController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleStremioAuth() async {
+    setState(() => _isLoggingIn = true);
+    final api = ref.read(stremioApiServiceProvider);
+
+    try {
+      if (_stremioAuthTab == 0) {
+        // Login
+        if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
+          throw 'Ingresa tu correo y contraseña';
+        }
+        await api.login(_emailController.text.trim(), _passwordController.text);
+      } else if (_stremioAuthTab == 1) {
+        // Register
+        if (_emailController.text.trim().isEmpty || _passwordController.text.length < 5) {
+          throw 'Ingresa un correo válido y una contraseña de al menos 5 caracteres';
+        }
+        await api.register(_emailController.text.trim(), _passwordController.text);
+      } else {
+        // AuthKey
+        final key = _authKeyController.text.trim();
+        if (key.isEmpty) throw 'Ingresa un AuthKey de Stremio válido';
+        await api.getUser(key);
+        await api.syncAccountData();
+      }
+
+      ref.invalidate(stremioWatchHistoryProvider);
+      ref.invalidate(stremioTopMoviesProvider);
+      ref.invalidate(stremioTopSeriesProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sesión de Stremio iniciada con éxito'),
+            backgroundColor: Color(0xFF8B5CF6),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoggingIn = false);
+    }
+  }
+
+  Future<void> _showInstallAddonDialog() async {
+    _addonUrlController.clear();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E2E),
+        title: const Text('Instalar Addon de Stremio'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Pega la URL del manifest del addon (ej: https://torrentio.strem.fun/manifest.json):',
+              style: TextStyle(fontSize: 13, color: Colors.white70),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _addonUrlController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'https://...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6)),
+            onPressed: () => Navigator.of(dialogCtx).pop(_addonUrlController.text.trim()),
+            child: const Text('Instalar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      setState(() => _isInstallingAddon = true);
+      try {
+        final api = ref.read(stremioApiServiceProvider);
+        final addon = await api.installAddonFromManifestUrl(result);
+        ref.invalidate(stremioTopMoviesProvider);
+        ref.invalidate(stremioTopSeriesProvider);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Addon instalado: ${addon.name}'),
+              backgroundColor: const Color(0xFF8B5CF6),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al instalar addon: $e'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isInstallingAddon = false);
+      }
+    }
   }
 
   Future<void> _testAndConnectJellyfin() async {
@@ -127,6 +257,7 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
     final isServerOnline = serverStatusAsync.value?.isOnline ?? false;
     final currentUser = storage.currentUser;
     final jellyfinUser = ref.watch(userProvider);
+    final addons = storage.addons;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -144,6 +275,7 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          // 1. Streaming Engine
           _buildCard(
             title: 'Motor de Streaming Stremio',
             icon: IconsaxPlusBold.cpu,
@@ -190,13 +322,15 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'El servidor local (11470) gestiona torrents y buffer en segundo plano.',
+                  'El servidor integrado gestiona la reproducción torrent y cache en segundo plano.',
                   style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.5)),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
+
+          // 2. Stremio Account
           _buildCard(
             title: 'Cuenta de Stremio',
             icon: IconsaxPlusBold.user,
@@ -204,17 +338,36 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Sesión activa: ${currentUser.email}',
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text('${storage.addons.length} addons sincronizados',
-                          style: const TextStyle(fontSize: 12, color: Colors.white70)),
-                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const CircleAvatar(
+                            radius: 18,
+                            backgroundColor: Color(0xFF8B5CF6),
+                            child: Icon(Icons.person, color: Colors.white, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(currentUser.email,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'AuthKey: ${currentUser.authKey.length > 12 ? "${currentUser.authKey.substring(0, 10)}..." : currentUser.authKey}',
+                                  style: const TextStyle(fontSize: 11, color: Colors.white54),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           FilledButton.tonalIcon(
                             icon: const Icon(Icons.sync, size: 16),
-                            label: const Text('Sincronizar Addons y Recientes'),
+                            label: const Text('Sincronizar Datos'),
                             onPressed: () async {
                               await ref.read(stremioApiServiceProvider).syncAccountData();
                               ref.invalidate(stremioWatchHistoryProvider);
@@ -227,13 +380,15 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                             },
                           ),
                           const SizedBox(width: 10),
-                          OutlinedButton(
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent),
+                            icon: const Icon(Icons.logout, size: 16),
+                            label: const Text('Cerrar Sesión'),
                             onPressed: () async {
                               await ref.read(stremioApiServiceProvider).logout();
                               ref.invalidate(stremioWatchHistoryProvider);
                               setState(() {});
                             },
-                            child: const Text('Cerrar Sesión'),
                           ),
                         ],
                       ),
@@ -246,72 +401,141 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                         'Modo Invitado Activo: puedes explorar y reproducir sin login.',
                         style: TextStyle(fontSize: 13, color: Colors.white70),
                       ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _emailController,
-                        decoration: InputDecoration(
-                          labelText: 'Email de Stremio',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
+                      const SizedBox(height: 14),
+                      // Tabs: Login / Register / AuthKey
+                      SegmentedButton<int>(
+                        segments: const [
+                          ButtonSegment(value: 0, label: Text('Entrar')),
+                          ButtonSegment(value: 1, label: Text('Registrarse')),
+                          ButtonSegment(value: 2, label: Text('AuthKey')),
+                        ],
+                        selected: {_stremioAuthTab},
+                        onSelectionChanged: (set) => setState(() => _stremioAuthTab = set.first),
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: 'Contraseña',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      const SizedBox(height: 16),
+                      if (_stremioAuthTab == 2) ...[
+                        TextField(
+                          controller: _authKeyController,
+                          decoration: InputDecoration(
+                            labelText: 'Stremio AuthKey / Token',
+                            hintText: 'Pega tu token de autenticación...',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
+                      ] else ...[
+                        TextField(
+                          controller: _emailController,
+                          decoration: InputDecoration(
+                            labelText: 'Correo Electrónico',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          decoration: InputDecoration(
+                            labelText: 'Contraseña',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
                       FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF8B5CF6),
-                        ),
+                        style: FilledButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6)),
                         icon: _isLoggingIn
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
                             : const Icon(Icons.login),
-                        label: const Text('Iniciar Sesión en Stremio'),
-                        onPressed: _isLoggingIn
-                            ? null
-                            : () async {
-                                setState(() => _isLoggingIn = true);
-                                try {
-                                  await ref
-                                      .read(stremioApiServiceProvider)
-                                      .login(
-                                        _emailController.text,
-                                        _passwordController.text,
-                                      );
-                                  ref.invalidate(stremioWatchHistoryProvider);
-                                  ref.invalidate(stremioTopMoviesProvider);
-                                  ref.invalidate(stremioTopSeriesProvider);
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Sesión iniciada con éxito'),
-                                      ),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Error: $e')),
-                                    );
-                                  }
-                                } finally {
-                                  if (mounted) setState(() => _isLoggingIn = false);
-                                }
-                              },
+                        label: Text(
+                          _stremioAuthTab == 1
+                              ? 'Crear Cuenta Stremio'
+                              : (_stremioAuthTab == 2 ? 'Conectar con AuthKey' : 'Iniciar Sesión'),
+                        ),
+                        onPressed: _isLoggingIn ? null : _handleStremioAuth,
                       ),
                     ],
                   ),
           ),
           const SizedBox(height: 16),
+
+          // 3. Stremio Addons Management
+          _buildCard(
+            title: 'Addons de Streaming (${addons.length})',
+            icon: IconsaxPlusBold.category,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Gestiona los proveedores de contenido y torrents.',
+                      style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.6)),
+                    ),
+                    FilledButton.tonalIcon(
+                      icon: _isInstallingAddon
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.add, size: 16),
+                      label: const Text('Instalar Addon'),
+                      onPressed: _isInstallingAddon ? null : _showInstallAddonDialog,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: addons.length,
+                  separatorBuilder: (_, __) => const Divider(height: 16),
+                  itemBuilder: (context, idx) {
+                    final addon = addons[idx];
+                    return Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                          child: const Icon(IconsaxPlusLinear.box, size: 18, color: Color(0xFF8B5CF6)),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(addon.name,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              Text(
+                                'v${addon.version} • ${addon.catalogs.length} catálogos',
+                                style: const TextStyle(fontSize: 11, color: Colors.white54),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                          tooltip: 'Desinstalar Addon',
+                          onPressed: () async {
+                            await ref.read(stremioApiServiceProvider).uninstallAddon(addon.id);
+                            setState(() {});
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 4. Preferred Video Player
           _buildCard(
             title: 'Reproductor Preferido',
             icon: IconsaxPlusBold.video_play,
@@ -321,7 +545,7 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                 children: [
                   RadioListTile<ValkeryPlayerType>(
                     title: const Text('MediaKit Interno (Aceleración Hardware + PiP)'),
-                    subtitle: const Text('Recomendado: fluido, con subtítulos y miniatura.'),
+                    subtitle: const Text('Recomendado: fluido, con subtítulos integrados y reanudación.'),
                     value: ValkeryPlayerType.mediaKit,
                     groupValue: coordinator.preferredPlayer,
                     activeColor: const Color(0xFF8B5CF6),
@@ -333,7 +557,7 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                   ),
                   RadioListTile<ValkeryPlayerType>(
                     title: const Text('VLC Player Externo'),
-                    subtitle: const Text('Lanza la aplicación VLC instalada en el sistema.'),
+                    subtitle: const Text('Lanza la aplicación VLC instalada en el sistema operativo.'),
                     value: ValkeryPlayerType.vlcExternal,
                     groupValue: coordinator.preferredPlayer,
                     activeColor: const Color(0xFF8B5CF6),
@@ -348,6 +572,8 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
             ),
           ),
           const SizedBox(height: 16),
+
+          // 5. Jellyfin Integration
           _buildCard(
             title: 'Servidor Jellyfin (Opcional)',
             icon: IconsaxPlusBold.cloud_connection,
@@ -396,7 +622,7 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                           const SizedBox(height: 8),
                           Text(
                             'Sesión de usuario: ${jellyfinUser.name}',
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF8B5CF6)),
+                            style: const TextStyle(fontSize: 12, color: const Color(0xFF8B5CF6)),
                           ),
                         ],
                         const SizedBox(height: 14),
