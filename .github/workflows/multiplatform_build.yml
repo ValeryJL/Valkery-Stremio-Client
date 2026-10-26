@@ -15,6 +15,14 @@ jobs:
   build-windows:
     name: Build Windows Desktop x64 & Installer
     runs-on: windows-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/') ||
+      contains(github.event.head_commit.message, '[build]') ||
+      contains(github.event.head_commit.message, '[ci]') ||
+      contains(github.event.head_commit.message, '[release]') ||
+      contains(github.event.pull_request.title, '[build]') ||
+      contains(github.event.pull_request.title, '[ci]')
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -45,6 +53,14 @@ jobs:
   build-android:
     name: Build Android APK (Serverless Mobile)
     runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/') ||
+      contains(github.event.head_commit.message, '[build]') ||
+      contains(github.event.head_commit.message, '[ci]') ||
+      contains(github.event.head_commit.message, '[release]') ||
+      contains(github.event.pull_request.title, '[build]') ||
+      contains(github.event.pull_request.title, '[ci]')
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -71,6 +87,14 @@ jobs:
   build-linux:
     name: Build Linux Desktop x64
     runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/') ||
+      contains(github.event.head_commit.message, '[build]') ||
+      contains(github.event.head_commit.message, '[ci]') ||
+      contains(github.event.head_commit.message, '[release]') ||
+      contains(github.event.pull_request.title, '[build]') ||
+      contains(github.event.pull_request.title, '[ci]')
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux GTK build dependencies
@@ -96,6 +120,14 @@ jobs:
   build-macos:
     name: Build macOS Universal
     runs-on: macos-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/') ||
+      contains(github.event.head_commit.message, '[build]') ||
+      contains(github.event.head_commit.message, '[ci]') ||
+      contains(github.event.head_commit.message, '[release]') ||
+      contains(github.event.pull_request.title, '[build]') ||
+      contains(github.event.pull_request.title, '[ci]')
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
