@@ -10,6 +10,10 @@ echo "=========================================================="
 export FFMPEG_BIN="${FFMPEG_BIN:-/usr/bin/ffmpeg}"
 export FFPROBE_BIN="${FFPROBE_BIN:-/usr/bin/ffprobe}"
 export APP_PATH="${APP_PATH:-/root/.stremio-server}"
+export HTTP_PORT="${HTTP_PORT:-11470}"
+export HTTPS_PORT="${HTTPS_PORT:-0}"
+export RIVULET_ALLOWED_ORIGINS="*"
+export NO_CORS="1"
 
 mkdir -p "$APP_PATH"
 
@@ -31,11 +35,11 @@ if [ -f "/usr/share/nginx/html/index.html" ]; then
 fi
 
 # Start Native Streaming Server in background with keepalive loop
-echo "[Valkery] Launching Native Streaming Server daemon..."
+echo "[Valkery] Launching Native Streaming Server daemon with full CORS..."
 (
   cd /stremio
   while true; do
-    ./stream-server -p 11470
+    ./stream-server
     echo "[Valkery] Streaming server stopped, restarting in 1s..."
     sleep 1
   done

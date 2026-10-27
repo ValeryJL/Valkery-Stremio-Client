@@ -136,6 +136,38 @@ class StremioServerProcessManager {
       );
     }
 
+    if (kIsWeb && _status.state == StremioServerState.offline) {
+      try {
+        final origin = Uri.base.origin;
+        if (origin.isNotEmpty && origin != _serverUrl && !origin.startsWith('file://')) {
+          final fallbackUri = Uri.parse('$origin/stats.json');
+          final fallbackResp = await _httpClient
+              .get(fallbackUri)
+              .timeout(const Duration(milliseconds: 1500));
+          if (fallbackResp.statusCode == 200) {
+            final decoded = jsonDecode(fallbackResp.body);
+            var torrentsCount = 0;
+            String? ver;
+            if (decoded is Map<String, dynamic>) {
+              ver = (decoded['version'] ?? decoded['engineVersion'])?.toString();
+              if (decoded['torrents'] is List) {
+                torrentsCount = (decoded['torrents'] as List).length;
+              }
+            }
+            _serverUrl = origin;
+            _safeNotifyStatus(
+              StremioServerStatus(
+                state: StremioServerState.online,
+                serverUrl: _serverUrl,
+                version: ver ?? 'v4.x',
+                activeTorrents: torrentsCount,
+              ),
+            );
+          }
+        }
+      } catch (_) {}
+    }
+
     return _status;
   }
 
