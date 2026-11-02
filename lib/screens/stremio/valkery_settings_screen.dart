@@ -502,6 +502,39 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
           ),
           const SizedBox(height: 16),
 
+          // Modo Offline Manual (Nativo: Desktop y Móvil únicamente)
+          if (!kIsWeb) ...[
+            _buildCard(
+              title: 'Modo Fuera de Línea',
+              icon: IconsaxPlusBold.wifi_square,
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: Icon(
+                  ref.watch(stremioOfflineModeProvider)
+                      ? IconsaxPlusBold.wifi_square
+                      : IconsaxPlusLinear.wifi_square,
+                  color: ref.watch(stremioOfflineModeProvider)
+                      ? Colors.orange
+                      : const Color(0xFF8B5CF6),
+                ),
+                title: const Text(
+                  'Forzar Modo Offline',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: const Text(
+                  'Desconecta la aplicación de internet y prioriza únicamente tus descargas locales.',
+                  style: TextStyle(fontSize: 12, color: Colors.white60),
+                ),
+                value: ref.watch(stremioOfflineModeProvider),
+                activeColor: Colors.orange,
+                onChanged: (val) {
+                  ref.read(stremioOfflineModeProvider.notifier).setOffline(val);
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // 3. Stremio Addons Management
           _buildCard(
             title: 'Addons de Streaming (${addons.length})',

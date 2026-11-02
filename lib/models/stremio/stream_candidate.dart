@@ -108,7 +108,7 @@ class StreamCandidate {
     }
 
     final qs = queryParts.isNotEmpty ? '?${queryParts.join('&')}' : '';
-    return '$base/$infoHash/$targetIdx/hls.m3u8$qs';
+    return '$base/hlsv2/$infoHash/$targetIdx/master.m3u8$qs';
   }
 
   String get playbackUrl {
@@ -133,6 +133,7 @@ class StreamCandidate {
   /// Determines if this stream format is likely natively playable in a standard web browser without external player.
   bool get isWebCompatible {
     final lower = '$name $title $quality'.toLowerCase();
+    // Video codecs, containers, and HDR formats not supported natively in standard browser HTML5 video
     if (lower.contains('hevc') ||
         lower.contains('x265') ||
         lower.contains('h.265') ||
@@ -144,6 +145,21 @@ class StreamCandidate {
         lower.contains('remux') ||
         lower.contains('2160p') ||
         lower.contains('4k')) {
+      return false;
+    }
+    // Audio codecs and multi-channel tracks not supported natively in browser (Dolby AC3, E-AC3, DTS, TrueHD)
+    // Chrome/Firefox will drop or mute these tracks unless transcoded to AAC via HLS
+    if (lower.contains('ac3') ||
+        lower.contains('ac-3') ||
+        lower.contains('eac3') ||
+        lower.contains('ddp') ||
+        lower.contains('dd5') ||
+        lower.contains('dd+') ||
+        lower.contains('5.1') ||
+        lower.contains('7.1') ||
+        lower.contains('dts') ||
+        lower.contains('truehd') ||
+        lower.contains('atmos')) {
       return false;
     }
     return true;

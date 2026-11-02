@@ -173,7 +173,10 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     });
 
     _playingSubscription = _player.stream.playing.listen((isPlaying) {
-      if (!isPlaying) {
+      if (isPlaying) {
+        // Ensure audio is active and unmuted on Web & Native
+        _player.setVolume(_volume);
+      } else {
         _savePlaybackProgress();
       }
     });
@@ -289,6 +292,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
     try {
       await _player.open(mpv.Media(url));
+      await _player.setVolume(_volume);
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[ValkeryPlayer] Player.open caught exception: $e');
@@ -1008,42 +1012,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
         const Spacer(),
 
-        // Buffering Indicator in middle
-        StreamBuilder<bool>(
-          stream: _player.stream.buffering,
-          builder: (context, buffSnap) {
-            final isBuffering = buffSnap.data ?? false;
-            if (isBuffering && _playbackError == null) {
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.75),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFF8B5CF6),
-                      ),
-                    ),
-                    SizedBox(width: 10),
-                    Text(
-                      'Cargando búfer...',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              );
-            }
-            return const SizedBox.shrink();
-          },
-        ),
+
 
         const Spacer(),
 

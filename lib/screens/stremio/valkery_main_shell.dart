@@ -37,7 +37,8 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
       StremioLibraryScreen(
         onExploreCatalog: () => setState(() => _currentIndex = 0),
       ),
-      const StremioOfflineScreen(),
+      if (!kIsWeb)
+        const StremioOfflineScreen(),
       if (coordinator.isJellyfinActive)
         const ValkeryJellyfinView(),
       const ValkerySettingsScreen(),
@@ -54,11 +55,12 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
         selectedIcon: Icon(IconsaxPlusBold.folder_favorite, color: Color(0xFF8B5CF6)),
         label: 'Biblioteca',
       ),
-      const NavigationDestination(
-        icon: Icon(IconsaxPlusLinear.document_download),
-        selectedIcon: Icon(IconsaxPlusBold.document_download, color: Color(0xFF8B5CF6)),
-        label: 'Offline',
-      ),
+      if (!kIsWeb)
+        const NavigationDestination(
+          icon: Icon(IconsaxPlusLinear.document_download),
+          selectedIcon: Icon(IconsaxPlusBold.document_download, color: Color(0xFF8B5CF6)),
+          label: 'Offline',
+        ),
       if (coordinator.isJellyfinActive)
         const NavigationDestination(
           icon: Icon(IconsaxPlusLinear.video_square),
@@ -108,12 +110,13 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
                     Icon(IconsaxPlusBold.folder_favorite, color: Color(0xFF8B5CF6)),
                 label: Text('Biblioteca'),
               ),
-              const NavigationRailDestination(
-                icon: Icon(IconsaxPlusLinear.document_download),
-                selectedIcon:
-                    Icon(IconsaxPlusBold.document_download, color: Color(0xFF8B5CF6)),
-                label: Text('Offline'),
-              ),
+              if (!kIsWeb)
+                const NavigationRailDestination(
+                  icon: Icon(IconsaxPlusLinear.document_download),
+                  selectedIcon:
+                      Icon(IconsaxPlusBold.document_download, color: Color(0xFF8B5CF6)),
+                  label: Text('Offline'),
+                ),
               if (coordinator.isJellyfinActive)
                 const NavigationRailDestination(
                   icon: Icon(IconsaxPlusLinear.video_square),

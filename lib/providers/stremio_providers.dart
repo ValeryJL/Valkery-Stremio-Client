@@ -51,6 +51,28 @@ final stremioOfflineDownloadManagerProvider = Provider<StremioOfflineDownloadMan
   return manager;
 });
 
+/// Manual Forced Offline Mode Provider (Desktop & Mobile).
+final stremioOfflineModeProvider = StateNotifierProvider<StremioOfflineModeNotifier, bool>((ref) {
+  final storage = ref.watch(stremioStorageProvider);
+  return StremioOfflineModeNotifier(storage);
+});
+
+class StremioOfflineModeNotifier extends StateNotifier<bool> {
+  final StremioStorageService _storage;
+  StremioOfflineModeNotifier(this._storage) : super(_storage.preferences.forceOfflineMode);
+
+  Future<void> toggle() async {
+    final next = !state;
+    state = next;
+    await _storage.setForceOfflineMode(next);
+  }
+
+  Future<void> setOffline(bool enabled) async {
+    state = enabled;
+    await _storage.setForceOfflineMode(enabled);
+  }
+}
+
 /// Stream of active and completed offline downloads.
 final stremioOfflineDownloadsStreamProvider = StreamProvider<List<OfflineMediaEntry>>((ref) {
   final manager = ref.watch(stremioOfflineDownloadManagerProvider);

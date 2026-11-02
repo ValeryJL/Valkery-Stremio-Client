@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/stremio/download_task.dart';
 import '../../models/stremio/media_item.dart';
@@ -17,6 +18,7 @@ class AppPreferences {
   final String preferredSubtitleLang;
   final String preferredQuality;
   final bool autoSyncStremioHistory;
+  final bool forceOfflineMode;
 
   const AppPreferences({
     this.darkMode = true,
@@ -25,6 +27,7 @@ class AppPreferences {
     this.preferredSubtitleLang = 'spa',
     this.preferredQuality = '1080p',
     this.autoSyncStremioHistory = true,
+    this.forceOfflineMode = false,
   });
 
   AppPreferences copyWith({
@@ -34,6 +37,7 @@ class AppPreferences {
     String? preferredSubtitleLang,
     String? preferredQuality,
     bool? autoSyncStremioHistory,
+    bool? forceOfflineMode,
   }) {
     return AppPreferences(
       darkMode: darkMode ?? this.darkMode,
@@ -44,6 +48,7 @@ class AppPreferences {
       preferredQuality: preferredQuality ?? this.preferredQuality,
       autoSyncStremioHistory:
           autoSyncStremioHistory ?? this.autoSyncStremioHistory,
+      forceOfflineMode: forceOfflineMode ?? this.forceOfflineMode,
     );
   }
 
@@ -55,6 +60,7 @@ class AppPreferences {
       'preferredSubtitleLang': preferredSubtitleLang,
       'preferredQuality': preferredQuality,
       'autoSyncStremioHistory': autoSyncStremioHistory,
+      'forceOfflineMode': forceOfflineMode,
     };
   }
 
@@ -67,6 +73,7 @@ class AppPreferences {
           (json['preferredSubtitleLang'] ?? 'spa').toString(),
       preferredQuality: (json['preferredQuality'] ?? '1080p').toString(),
       autoSyncStremioHistory: json['autoSyncStremioHistory'] != false,
+      forceOfflineMode: json['forceOfflineMode'] == true,
     );
   }
 }
@@ -202,7 +209,22 @@ class StremioStorageService {
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
-    if (inMemory || kIsWeb) {
+    if (inMemory) {
+      _notifyWatchHistory();
+      return;
+    }
+
+    if (kIsWeb) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('valkery_stremio_state_web');
+        if (raw != null && raw.trim().isNotEmpty) {
+          final decoded = jsonDecode(raw);
+          if (decoded is Map<String, dynamic>) {
+            _loadFromDecoded(decoded);
+          }
+        }
+      } catch (_) {}
       _notifyWatchHistory();
       return;
     }
@@ -238,105 +260,109 @@ class StremioStorageService {
         return;
       }
       final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        _notifyWatchHistory();
-        return;
-      }
-
-      if (decoded['user'] is Map<String, dynamic>) {
-        _currentUser = StremioUser.fromJson(
-          decoded['user'] as Map<String, dynamic>,
-        );
-      }
-
-      if (decoded['addons'] is List) {
-        final loadedAddons = (decoded['addons'] as List<dynamic>)
-            .whereType<Map<String, dynamic>>()
-            .map(StremioAddon.fromJson)
-            .toList();
-        if (loadedAddons.isNotEmpty) {
-          _addons = loadedAddons;
-        }
-      }
-
-      if (decoded['watchHistory'] is List) {
-        _watchHistory.clear();
-        for (final item in decoded['watchHistory'] as List<dynamic>) {
-          if (item is Map<String, dynamic>) {
-            final state = LibraryWatchState.fromJson(item);
-            if (state.id.isNotEmpty) {
-              _watchHistory[state.id] = state;
-            }
-          }
-        }
-      }
-
-      if (decoded['offlineSyncQueue'] is List) {
-        _offlineSyncQueue.clear();
-        for (final item in decoded['offlineSyncQueue'] as List<dynamic>) {
-          if (item is Map<String, dynamic>) {
-            final state = LibraryWatchState.fromJson(
-              item,
-            ).copyWith(pendingOfflineSync: true);
-            if (state.id.isNotEmpty) {
-              _offlineSyncQueue[state.id] = state;
-            }
-          }
-        }
-      }
-
-      if (decoded['downloadTasks'] is List) {
-        _downloadTasks.clear();
-        for (final item in decoded['downloadTasks'] as List<dynamic>) {
-          if (item is Map<String, dynamic>) {
-            final task = DownloadTaskItem.fromJson(item);
-            if (task.id.isNotEmpty) {
-              _downloadTasks[task.id] = task;
-            }
-          }
-        }
-      }
-
-      if (decoded['preferences'] is Map<String, dynamic>) {
-        _preferences = AppPreferences.fromJson(
-          decoded['preferences'] as Map<String, dynamic>,
-        );
-      }
-
-      if (decoded['libraryFavorites'] is List) {
-        _libraryFavorites.clear();
-        for (final item in decoded['libraryFavorites'] as List<dynamic>) {
-          if (item is Map<String, dynamic>) {
-            try {
-              final media = MediaItem.fromJson(item);
-              if (media.id.isNotEmpty) {
-                _libraryFavorites[media.id] = media;
-              }
-            } catch (_) {}
-          }
-        }
-      }
-
-      // Migrate legacy favorites into _watchHistory with isLibraryItem: true
-      for (final fav in _libraryFavorites.values) {
-        final existing = _watchHistory[fav.id];
-        if (existing == null) {
-          _watchHistory[fav.id] = LibraryWatchState(
-            id: fav.id,
-            name: fav.name,
-            type: fav.type,
-            poster: fav.poster,
-            videoId: fav.id,
-            lastWatched: DateTime.now().toUtc(),
-            isLibraryItem: true,
-          );
-        } else if (!existing.isLibraryItem) {
-          _watchHistory[fav.id] = existing.copyWith(isLibraryItem: true);
-        }
+      if (decoded is Map<String, dynamic>) {
+        _loadFromDecoded(decoded);
       }
     } catch (_) {
-      // Recover gracefully with default state if JSON is corrupted.
+      // Recover gracefully with default state if file or JSON is corrupted.
     }
+
+    _notifyWatchHistory();
+  }
+
+  void _loadFromDecoded(Map<String, dynamic> decoded) {
+    if (decoded['user'] is Map<String, dynamic>) {
+      _currentUser = StremioUser.fromJson(
+        decoded['user'] as Map<String, dynamic>,
+      );
+    }
+
+    if (decoded['addons'] is List) {
+      final loadedAddons = (decoded['addons'] as List<dynamic>)
+          .whereType<Map<String, dynamic>>()
+          .map(StremioAddon.fromJson)
+          .toList();
+      if (loadedAddons.isNotEmpty) {
+        _addons = loadedAddons;
+      }
+    }
+
+    if (decoded['watchHistory'] is List) {
+      _watchHistory.clear();
+      for (final item in decoded['watchHistory'] as List<dynamic>) {
+        if (item is Map<String, dynamic>) {
+          final state = LibraryWatchState.fromJson(item);
+          if (state.id.isNotEmpty) {
+            _watchHistory[state.id] = state;
+          }
+        }
+      }
+    }
+
+    if (decoded['offlineSyncQueue'] is List) {
+      _offlineSyncQueue.clear();
+      for (final item in decoded['offlineSyncQueue'] as List<dynamic>) {
+        if (item is Map<String, dynamic>) {
+          final state = LibraryWatchState.fromJson(
+            item,
+          ).copyWith(pendingOfflineSync: true);
+          if (state.id.isNotEmpty) {
+            _offlineSyncQueue[state.id] = state;
+          }
+        }
+      }
+    }
+
+    if (decoded['downloadTasks'] is List) {
+      _downloadTasks.clear();
+      for (final item in decoded['downloadTasks'] as List<dynamic>) {
+        if (item is Map<String, dynamic>) {
+          final task = DownloadTaskItem.fromJson(item);
+          if (task.id.isNotEmpty) {
+            _downloadTasks[task.id] = task;
+          }
+        }
+      }
+    }
+
+    if (decoded['preferences'] is Map<String, dynamic>) {
+      _preferences = AppPreferences.fromJson(
+        decoded['preferences'] as Map<String, dynamic>,
+      );
+    }
+
+    if (decoded['libraryFavorites'] is List) {
+      _libraryFavorites.clear();
+      for (final item in decoded['libraryFavorites'] as List<dynamic>) {
+        if (item is Map<String, dynamic>) {
+          try {
+            final media = MediaItem.fromJson(item);
+            if (media.id.isNotEmpty) {
+              _libraryFavorites[media.id] = media;
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    // Migrate legacy favorites into _watchHistory with isLibraryItem: true
+    for (final fav in _libraryFavorites.values) {
+      final existing = _watchHistory[fav.id];
+      if (existing == null) {
+        _watchHistory[fav.id] = LibraryWatchState(
+          id: fav.id,
+          name: fav.name,
+          type: fav.type,
+          poster: fav.poster,
+          videoId: fav.id,
+          lastWatched: DateTime.now().toUtc(),
+          isLibraryItem: true,
+        );
+      } else if (!existing.isLibraryItem) {
+        _watchHistory[fav.id] = existing.copyWith(isLibraryItem: true);
+      }
+    }
+  }
 
     _notifyWatchHistory();
   }
@@ -445,22 +471,43 @@ class StremioStorageService {
     await _persist();
   }
 
+  bool get isOfflineMode => _preferences.forceOfflineMode;
+
+  Future<void> setForceOfflineMode(bool enabled) async {
+    _preferences = _preferences.copyWith(forceOfflineMode: enabled);
+    await _persist();
+  }
+
+  Map<String, dynamic> _buildPayload() {
+    return {
+      'user': _currentUser?.toJson(),
+      'addons': _addons.map((a) => a.toJson()).toList(),
+      'watchHistory': _watchHistory.values.map((w) => w.toJson()).toList(),
+      'libraryFavorites':
+          _libraryFavorites.values.map((m) => m.toJson()).toList(),
+      'offlineSyncQueue':
+          _offlineSyncQueue.values.map((w) => w.toJson()).toList(),
+      'downloadTasks': _downloadTasks.values.map((t) => t.toJson()).toList(),
+      'preferences': _preferences.toJson(),
+    };
+  }
+
   Future<void> _persist() async {
     if (inMemory) return;
+
+    if (kIsWeb) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final payload = _buildPayload();
+        await prefs.setString('valkery_stremio_state_web', jsonEncode(payload));
+      } catch (_) {}
+      return;
+    }
+
     try {
       final file = File(resolvedStorageFilePath);
       await file.parent.create(recursive: true);
-      final payload = {
-        'user': _currentUser?.toJson(),
-        'addons': _addons.map((a) => a.toJson()).toList(),
-        'watchHistory': _watchHistory.values.map((w) => w.toJson()).toList(),
-        'libraryFavorites':
-            _libraryFavorites.values.map((m) => m.toJson()).toList(),
-        'offlineSyncQueue':
-            _offlineSyncQueue.values.map((w) => w.toJson()).toList(),
-        'downloadTasks': _downloadTasks.values.map((t) => t.toJson()).toList(),
-        'preferences': _preferences.toJson(),
-      };
+      final payload = _buildPayload();
       await file.writeAsString(
         const JsonEncoder.withIndent('  ').convert(payload),
       );
