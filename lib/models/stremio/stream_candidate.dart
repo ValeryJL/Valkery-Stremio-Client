@@ -83,32 +83,41 @@ class StreamCandidate {
   }
 
   /// Resolves the built-in HLS transcode URL dynamically against a specified Stremio streaming server.
+  /// Converts MKV/HEVC/AC3/DTS torrents and streams to browser-compatible H.264 + AAC stereo on the fly.
   String hlsPlaybackUrlFor(String serverBaseUrl) {
-    if (infoHash.isEmpty) return playbackUrlFor(serverBaseUrl);
+    if (infoHash.isEmpty && url.isEmpty) return '';
     final base = serverBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
     final targetIdx = fileIdx ?? -1;
 
-    final queryParts = <String>[];
-    final trSet = <String>{};
+    String rawMediaUrl;
+    if (url.isNotEmpty) {
+      rawMediaUrl = url;
+    } else {
+      final queryParts = <String>[];
+      final trSet = <String>{};
 
-    for (final s in sources) {
-      if (s.startsWith('tracker:')) {
-        trSet.add(s.substring('tracker:'.length));
-      } else if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('udp://')) {
-        trSet.add(s);
+      for (final s in sources) {
+        if (s.startsWith('tracker:')) {
+          trSet.add(s.substring('tracker:'.length));
+        } else if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('udp://')) {
+          trSet.add(s);
+        }
       }
+
+      trSet.addAll(defaultTrackers);
+
+      for (final tr in trSet) {
+        queryParts.add('tr=${Uri.encodeQueryComponent(tr)}');
+      }
+
+      final qs = queryParts.isNotEmpty ? '?${queryParts.join('&')}' : '';
+      rawMediaUrl = 'http://127.0.0.1:11470/$infoHash/$targetIdx$qs';
     }
 
-    // Always ensure robust default fallback trackers so streams without tracker metadata (e.g. Torrentio infohash-only)
-    // or on firewalled / DHT-blocked connections find global peers immediately.
-    trSet.addAll(defaultTrackers);
+    final streamId = infoHash.isNotEmpty ? infoHash : 'stream';
+    final encodedMediaUrl = Uri.encodeComponent(rawMediaUrl);
 
-    for (final tr in trSet) {
-      queryParts.add('tr=${Uri.encodeQueryComponent(tr)}');
-    }
-
-    final qs = queryParts.isNotEmpty ? '?${queryParts.join('&')}' : '';
-    return '$base/hlsv2/$infoHash/$targetIdx/master.m3u8$qs';
+    return '$base/hlsv2/$streamId/master.m3u8?mediaURL=$encodedMediaUrl';
   }
 
   String get playbackUrl {

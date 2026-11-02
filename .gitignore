@@ -88,3 +88,5 @@ build_output/
 
 release_binaries/
 stream-server.exe
+
+dist/

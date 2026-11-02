@@ -282,7 +282,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     if (!mounted) return;
     final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
     final url = widget.localFilePath ??
-        ((kIsWeb && !widget.stream.isWebCompatible && widget.stream.isTorrent)
+        ((kIsWeb && (widget.stream.isTorrent || !widget.stream.isWebCompatible))
             ? widget.stream.hlsPlaybackUrlFor(serverUrl)
             : widget.stream.playbackUrlFor(serverUrl));
 
