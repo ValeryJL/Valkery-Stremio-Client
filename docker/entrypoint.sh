@@ -28,10 +28,17 @@ EOF
 
 # Normalize FLADDER_WEBPATH (e.g. /fladder/)
 WEBPATH=$(echo "${FLADDER_WEBPATH:-/}" | sed 's|^/*|/|; s|/*$|/|')
+BUILD_HASH=$(date +%s)
 
-# Update base href in index.html (always at root of build/web)
+# Update base href and cache-bust entrypoints in index.html
 if [ -f "/usr/share/nginx/html/index.html" ]; then
   sed -i "s|<base href=\"[^\"]*\">|<base href=\"$WEBPATH\">|g" /usr/share/nginx/html/index.html
+  sed -i "s|flutter_bootstrap\.js[^\"]*|flutter_bootstrap.js?v=$BUILD_HASH|g" /usr/share/nginx/html/index.html
+fi
+
+# Cache-bust main.dart.js in flutter_bootstrap.js to prevent CDN/Browser stale caches
+if [ -f "/usr/share/nginx/html/flutter_bootstrap.js" ]; then
+  sed -i "s|main\.dart\.js[^\"]*|main.dart.js?v=$BUILD_HASH|g" /usr/share/nginx/html/flutter_bootstrap.js
 fi
 
 # Start Native Streaming Server in background with keepalive loop
