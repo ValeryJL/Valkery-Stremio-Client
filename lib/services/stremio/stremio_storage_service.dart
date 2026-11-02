@@ -364,9 +364,6 @@ class StremioStorageService {
     }
   }
 
-    _notifyWatchHistory();
-  }
-
   Future<void> saveUser(StremioUser? user) async {
     _currentUser = user;
     await _persist();
