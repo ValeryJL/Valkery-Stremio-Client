@@ -138,6 +138,7 @@ class StremioStorageService {
 
   bool isInLibrary(String mediaId) => _watchHistory[mediaId]?.isLibraryItem ?? false;
   bool isFavorite(String mediaId) => isInLibrary(mediaId);
+  MediaItem? getLibraryMedia(String mediaId) => _libraryFavorites[mediaId];
 
   Future<void> addToLibrary(MediaItem item) async {
     _libraryFavorites[item.id] = item;

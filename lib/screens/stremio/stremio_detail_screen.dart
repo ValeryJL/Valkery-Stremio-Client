@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,7 @@ import '../../models/stremio/stream_candidate.dart';
 import '../../models/stremio/watch_history_item.dart';
 import '../../providers/source_coordinator_provider.dart';
 import '../../providers/stremio_providers.dart';
+import '../../services/stremio/stremio_offline_download_manager.dart';
 import '../../util/external_player_launcher.dart';
 import '../../util/web_image_helper.dart';
 import 'stremio_player_screen.dart';
@@ -519,6 +521,50 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                 ),
               ),
               onPressed: () {
+                final isOffline = ref.read(stremioOfflineModeProvider);
+                if (isOffline) {
+                  final downloads = ref.read(stremioOfflineDownloadManagerProvider).allDownloads;
+                  final entry = downloads.cast<OfflineMediaEntry?>().firstWhere(
+                        (d) =>
+                            d != null &&
+                            d.status == OfflineItemStatus.completed &&
+                            (isSeries
+                                ? ((d.id == '${media.id}_S${_selectedSeason}E$_selectedEpisode') ||
+                                   (d.id.startsWith(media.id) && d.season == _selectedSeason && d.episode == _selectedEpisode))
+                                : (d.id == media.id || d.id.startsWith(media.id))),
+                        orElse: () => null,
+                      );
+                  if (entry != null && entry.localVideoPath.isNotEmpty) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StremioPlayerScreen(
+                          media: media,
+                          stream: StreamCandidate(
+                            name: 'Offline Local',
+                            title: 'Archivo descargado',
+                            url: entry.localVideoPath,
+                            quality: 'Local',
+                            behaviorHints: const {'notWebReady': false},
+                          ),
+                          localFilePath: entry.localVideoPath,
+                          season: isSeries ? _selectedSeason : null,
+                          episode: isSeries ? _selectedEpisode : null,
+                        ),
+                      ),
+                    );
+                    return;
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No hay archivo descargado disponible para este elemento.'),
+                        duration: Duration(seconds: 2),
+                        backgroundColor: Color(0xFF1F1D36),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                }
                 final streams = streamsAsync.value;
                 if (streams != null && streams.isNotEmpty) {
                   // Direct play best available stream
@@ -754,8 +800,27 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
 
   /// Individual Episode Card (16:9 thumbnail, badge, title, overview snippet, play button)
   Widget _buildEpisodeCard(EpisodeItem ep, bool isSelected, MediaItem media) {
+    final isOfflineMode = ref.watch(stremioOfflineModeProvider);
+    final downloads = ref.watch(stremioOfflineDownloadsStreamProvider).value ??
+        ref.read(stremioOfflineDownloadManagerProvider).allDownloads;
+    final isDownloaded = downloads.any((d) =>
+        d.status == OfflineItemStatus.completed &&
+        ((d.id == '${media.id}_S${ep.season}E${ep.episode}') ||
+         (d.id.startsWith(media.id) && d.season == ep.season && d.episode == ep.episode)));
+
     return GestureDetector(
       onTap: () {
+        if (isOfflineMode && !isDownloaded) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Este episodio no está descargado para ver sin conexión.'),
+              duration: Duration(seconds: 2),
+              backgroundColor: Color(0xFF1F1D36),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
         setState(() => _selectedEpisode = ep.episode);
       },
       child: Container(
@@ -782,14 +847,30 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (ep.thumbnail.isNotEmpty)
-                    Image.network(
-                      resolveWebSafeImageUrl(ep.thumbnail),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _buildEpisodePlaceholder(ep),
-                    )
-                  else
-                    _buildEpisodePlaceholder(ep),
+                  () {
+                    Widget thumb = ep.thumbnail.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: resolveWebSafeImageUrl(ep.thumbnail),
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => _buildEpisodePlaceholder(ep),
+                            errorWidget: (_, __, ___) => _buildEpisodePlaceholder(ep),
+                          )
+                        : _buildEpisodePlaceholder(ep);
+
+                    if (isOfflineMode && !isDownloaded) {
+                      thumb = ColorFiltered(
+                        colorFilter: const ColorFilter.mode(
+                          Colors.grey,
+                          BlendMode.saturation,
+                        ),
+                        child: Opacity(
+                          opacity: 0.38,
+                          child: thumb,
+                        ),
+                      );
+                    }
+                    return thumb;
+                  }(),
                   // Gradient shadow on thumbnail
                   Container(
                     decoration: BoxDecoration(
@@ -815,28 +896,68 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                       ),
                       child: Text(
                         ep.code,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: (isOfflineMode && !isDownloaded) ? Colors.white54 : Colors.white,
                         ),
                       ),
                     ),
                   ),
+                  // Offline Status Pill (Top Right)
+                  if (isOfflineMode)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDownloaded
+                              ? const Color(0xFF10B981).withValues(alpha: 0.9)
+                              : Colors.black.withValues(alpha: 0.75),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isDownloaded
+                                  ? IconsaxPlusBold.document_download
+                                  : IconsaxPlusLinear.cloud_cross,
+                              size: 10,
+                              color: isDownloaded ? Colors.white : Colors.white60,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              isDownloaded ? 'OFFLINE' : 'ONLINE',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: isDownloaded ? Colors.white : Colors.white60,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   // Play button hover/action (Center)
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF8B5CF6)
-                            : Colors.black.withValues(alpha: 0.5),
+                        color: (isOfflineMode && !isDownloaded)
+                            ? Colors.black.withValues(alpha: 0.4)
+                            : (isSelected
+                                ? const Color(0xFF8B5CF6)
+                                : Colors.black.withValues(alpha: 0.5)),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        IconsaxPlusBold.play,
+                      child: Icon(
+                        (isOfflineMode && !isDownloaded)
+                            ? IconsaxPlusLinear.close_circle
+                            : IconsaxPlusBold.play,
                         size: 18,
-                        color: Colors.white,
+                        color: (isOfflineMode && !isDownloaded) ? Colors.white38 : Colors.white,
                       ),
                     ),
                   ),
@@ -856,7 +977,9 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? const Color(0xFFC4B5FD) : Colors.white,
+                      color: (isOfflineMode && !isDownloaded)
+                          ? Colors.white38
+                          : (isSelected ? const Color(0xFFC4B5FD) : Colors.white),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -866,6 +989,20 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
+                        fontSize: 11,
+                        color: (isOfflineMode && !isDownloaded)
+                            ? Colors.white24
+                            : Colors.white.withValues(alpha: 0.6),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
                         fontSize: 11,
                         color: Colors.white.withValues(alpha: 0.6),
                       ),

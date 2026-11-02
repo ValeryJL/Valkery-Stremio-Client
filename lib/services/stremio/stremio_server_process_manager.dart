@@ -226,6 +226,60 @@ class StremioServerProcessManager {
     }
   }
 
+  /// Explicitly terminates the local streaming server process across all platforms and pauses health polling.
+  Future<void> stopLocalServer() async {
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = null;
+
+    if (!kIsWeb) {
+      if (Platform.isAndroid) {
+        try {
+          await _androidChannel.invokeMethod('stopDaemon');
+        } catch (_) {}
+      } else if (Platform.isWindows) {
+        try {
+          await Process.run('taskkill', ['/F', '/IM', 'stream-server.exe', '/T']);
+        } catch (_) {}
+        try {
+          await Process.run('taskkill', ['/F', '/IM', 'stremio-runtime.exe', '/T']);
+        } catch (_) {}
+        try {
+          await Process.run('taskkill', ['/F', '/IM', 'server.exe', '/T']);
+        } catch (_) {}
+      } else if (Platform.isLinux || Platform.isMacOS) {
+        try {
+          await Process.run('pkill', ['-9', '-f', 'stream-server']);
+        } catch (_) {}
+        try {
+          await Process.run('pkill', ['-9', '-f', 'stremio-runtime']);
+        } catch (_) {}
+        try {
+          await Process.run('pkill', ['-9', '-f', 'stremio-service']);
+        } catch (_) {}
+      }
+    }
+
+    final proc = _serverProcess;
+    _serverProcess = null;
+    if (proc != null) {
+      try {
+        proc.kill(ProcessSignal.sigkill);
+      } catch (_) {
+        try {
+          proc.kill();
+        } catch (_) {}
+      }
+    }
+
+    _safeNotifyStatus(
+      StremioServerStatus(
+        state: StremioServerState.offline,
+        serverUrl: _serverUrl,
+        errorMessage: 'Servidor detenido (Modo Offline activo)',
+      ),
+    );
+  }
+
   /// Locates standard installation paths for Stremio headless server / runtime.
   /// First checks embedded app bundle, then host installation paths.
   static String? _detectInstalledStremioExecutable() {

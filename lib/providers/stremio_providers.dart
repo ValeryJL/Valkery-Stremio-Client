@@ -54,22 +54,30 @@ final stremioOfflineDownloadManagerProvider = Provider<StremioOfflineDownloadMan
 /// Manual Forced Offline Mode Provider (Desktop & Mobile).
 final stremioOfflineModeProvider = StateNotifierProvider<StremioOfflineModeNotifier, bool>((ref) {
   final storage = ref.watch(stremioStorageProvider);
-  return StremioOfflineModeNotifier(storage);
+  final processManager = ref.watch(stremioServerProcessManagerProvider);
+  return StremioOfflineModeNotifier(storage, processManager);
 });
 
 class StremioOfflineModeNotifier extends StateNotifier<bool> {
   final StremioStorageService _storage;
-  StremioOfflineModeNotifier(this._storage) : super(_storage.preferences.forceOfflineMode);
+  final StremioServerProcessManager? _processManager;
+
+  StremioOfflineModeNotifier(this._storage, [this._processManager])
+      : super(_storage.preferences.forceOfflineMode);
 
   Future<void> toggle() async {
     final next = !state;
-    state = next;
-    await _storage.setForceOfflineMode(next);
+    await setOffline(next);
   }
 
   Future<void> setOffline(bool enabled) async {
     state = enabled;
     await _storage.setForceOfflineMode(enabled);
+    if (enabled) {
+      await _processManager?.stopLocalServer();
+    } else {
+      await _processManager?.initialize(autoStartLocalDaemon: true);
+    }
   }
 }
 
@@ -81,12 +89,14 @@ final stremioOfflineDownloadsStreamProvider = StreamProvider<List<OfflineMediaEn
 
 /// Top popular movies from Cinemeta.
 final stremioTopMoviesProvider = FutureProvider.autoDispose<List<MediaItem>>((ref) async {
+  if (ref.watch(stremioOfflineModeProvider)) return const [];
   final service = ref.watch(catalogAndStreamServiceProvider);
   return service.fetchTopCatalog(type: 'movie');
 });
 
 /// Top popular TV series from Cinemeta.
 final stremioTopSeriesProvider = FutureProvider.autoDispose<List<MediaItem>>((ref) async {
+  if (ref.watch(stremioOfflineModeProvider)) return const [];
   final service = ref.watch(catalogAndStreamServiceProvider);
   return service.fetchTopCatalog(type: 'series');
 });
@@ -95,6 +105,7 @@ final stremioTopSeriesProvider = FutureProvider.autoDispose<List<MediaItem>>((re
 final stremioSearchQueryProvider = StateProvider<String>((ref) => '');
 
 final stremioSearchResultsProvider = FutureProvider.autoDispose<List<MediaItem>>((ref) async {
+  if (ref.watch(stremioOfflineModeProvider)) return const [];
   final query = ref.watch(stremioSearchQueryProvider);
   final service = ref.watch(catalogAndStreamServiceProvider);
   if (query.trim().isEmpty) return const [];
@@ -104,14 +115,31 @@ final stremioSearchResultsProvider = FutureProvider.autoDispose<List<MediaItem>>
 /// Full media details (synopsis, cast, director, episodes, backdrop) from Cinemeta.
 final stremioMediaDetailsProvider = FutureProvider.family
     .autoDispose<MediaItem, ({String id, String type})>((ref, params) async {
+  final isOffline = ref.watch(stremioOfflineModeProvider);
+  final storage = ref.watch(stremioStorageProvider);
+  if (isOffline) {
+    final cached = storage.getLibraryMedia(params.id);
+    if (cached != null) return cached;
+  }
   final service = ref.watch(catalogAndStreamServiceProvider);
-  return service.fetchMediaDetails(params.id, params.type);
+  try {
+    final details = await service.fetchMediaDetails(params.id, params.type);
+    if (storage.isInLibrary(params.id)) {
+      await storage.addToLibrary(details);
+    }
+    return details;
+  } catch (_) {
+    final cached = storage.getLibraryMedia(params.id);
+    if (cached != null) return cached;
+    rethrow;
+  }
 });
 
 /// Streams discovery for a specific media item ID and type.
 final stremioStreamsProvider = FutureProvider.family
     .autoDispose<List<StreamCandidate>, ({String id, String type, int? season, int? episode})>(
   (ref, params) async {
+    if (ref.watch(stremioOfflineModeProvider)) return const [];
     final service = ref.watch(catalogAndStreamServiceProvider);
     final storage = ref.watch(stremioStorageProvider);
     return service.fetchStreams(

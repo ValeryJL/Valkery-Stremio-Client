@@ -8,6 +8,7 @@ import 'package:iconsax_plus/iconsax_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../providers/source_coordinator_provider.dart';
+import '../../providers/stremio_providers.dart';
 import 'stremio_discover_screen.dart';
 import 'stremio_library_screen.dart';
 import 'stremio_offline_screen.dart';
@@ -29,13 +30,50 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final coordinator = ref.watch(sourceCoordinatorProvider);
+    final isOfflineMode = ref.watch(stremioOfflineModeProvider);
     final isDesktop = MediaQuery.of(context).size.width > 768;
     final isDesktopPlatform = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+
+    // If offline mode is active and user is on Explorar, redirect to Biblioteca
+    if (isOfflineMode && _currentIndex == 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _currentIndex == 0) {
+          setState(() => _currentIndex = 1);
+        }
+      });
+    }
+
+    void handleDestinationSelected(int idx) {
+      if (idx == 0 && isOfflineMode) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(IconsaxPlusLinear.info_circle, color: Colors.amberAccent, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Modo Offline activo: La pestaña Explorar requiere internet.',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF1F1D36),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+      setState(() => _currentIndex = idx);
+    }
 
     final screens = <Widget>[
       const StremioDiscoverScreen(),
       StremioLibraryScreen(
-        onExploreCatalog: () => setState(() => _currentIndex = 0),
+        onExploreCatalog: isOfflineMode ? null : () => setState(() => _currentIndex = 0),
       ),
       if (!kIsWeb)
         const StremioOfflineScreen(),
@@ -45,10 +83,16 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
     ];
 
     final destinations = <NavigationDestination>[
-      const NavigationDestination(
-        icon: Icon(IconsaxPlusLinear.discover),
-        selectedIcon: Icon(IconsaxPlusBold.discover, color: Color(0xFF8B5CF6)),
-        label: 'Explorar',
+      NavigationDestination(
+        icon: Icon(
+          IconsaxPlusLinear.discover,
+          color: isOfflineMode ? Colors.white30 : null,
+        ),
+        selectedIcon: Icon(
+          IconsaxPlusBold.discover,
+          color: isOfflineMode ? Colors.white30 : const Color(0xFF8B5CF6),
+        ),
+        label: isOfflineMode ? 'Explorar (Off)' : 'Explorar',
       ),
       const NavigationDestination(
         icon: Icon(IconsaxPlusLinear.folder_favorite),
@@ -83,7 +127,7 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
           NavigationRail(
             backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.6),
             selectedIndex: safeIndex,
-            onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+            onDestinationSelected: handleDestinationSelected,
             labelType: NavigationRailLabelType.all,
             leading: Padding(
               padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -99,10 +143,19 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
               ),
             ),
             destinations: [
-              const NavigationRailDestination(
-                icon: Icon(IconsaxPlusLinear.discover),
-                selectedIcon: Icon(IconsaxPlusBold.discover, color: Color(0xFF8B5CF6)),
-                label: Text('Explorar'),
+              NavigationRailDestination(
+                icon: Icon(
+                  IconsaxPlusLinear.discover,
+                  color: isOfflineMode ? Colors.white30 : null,
+                ),
+                selectedIcon: Icon(
+                  IconsaxPlusBold.discover,
+                  color: isOfflineMode ? Colors.white30 : const Color(0xFF8B5CF6),
+                ),
+                label: Text(
+                  'Explorar',
+                  style: TextStyle(color: isOfflineMode ? Colors.white30 : null),
+                ),
               ),
               const NavigationRailDestination(
                 icon: Icon(IconsaxPlusLinear.folder_favorite),
@@ -176,7 +229,7 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
                   backgroundColor: const Color(0xFF141326),
                   indicatorColor: const Color(0xFF8B5CF6).withValues(alpha: 0.25),
                   selectedIndex: safeIndex,
-                  onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+                  onDestinationSelected: handleDestinationSelected,
                   destinations: destinations,
                 )
               : null,

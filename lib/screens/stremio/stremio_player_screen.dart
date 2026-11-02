@@ -149,14 +149,12 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _durationSubscription = _player.stream.duration.listen((dur) {
       if (dur > Duration.zero && mounted && _isInitialLoading) {
         setState(() => _isInitialLoading = false);
-        _torrentStatsTimer?.cancel();
       }
     });
 
     _positionSubscription = _player.stream.position.listen((pos) {
       if (pos > Duration.zero && mounted && _isInitialLoading) {
         setState(() => _isInitialLoading = false);
-        _torrentStatsTimer?.cancel();
       }
     });
 
@@ -343,10 +341,10 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _torrentStatsTimer?.cancel();
     if (!widget.stream.isTorrent || widget.stream.infoHash.isEmpty) return;
 
-    final ih = widget.stream.infoHash.toLowerCase();
+    final ih = widget.stream.infoHash.trim().toLowerCase();
 
-    _torrentStatsTimer = Timer.periodic(const Duration(milliseconds: 900), (_) async {
-      if (!mounted || !_isInitialLoading) {
+    _torrentStatsTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) async {
+      if (!mounted) {
         _torrentStatsTimer?.cancel();
         return;
       }
@@ -356,11 +354,22 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         if (res.statusCode == 200 && mounted) {
           final decoded = jsonDecode(res.body);
           if (decoded is Map<String, dynamic>) {
-            final ihData = decoded[ih];
+            dynamic ihData = decoded[ih];
+            if (ihData == null) {
+              for (final entry in decoded.entries) {
+                if (entry.key.toString().toLowerCase() == ih) {
+                  ihData = entry.value;
+                  break;
+                }
+              }
+            }
             if (ihData is Map<String, dynamic>) {
-              final peers = int.tryParse(ihData['peers']?.toString() ?? '0') ?? 0;
-              final speed = int.tryParse(ihData['downloadSpeed']?.toString() ?? '0') ?? 0;
-              final downloaded = int.tryParse(ihData['downloaded']?.toString() ?? '0') ?? 0;
+              final peers = (ihData['peers'] as num?)?.toInt() ??
+                  (num.tryParse(ihData['peers']?.toString() ?? '0') ?? 0).toInt();
+              final speed = (ihData['downloadSpeed'] as num?)?.toInt() ??
+                  (num.tryParse(ihData['downloadSpeed']?.toString() ?? '0') ?? 0).toInt();
+              final downloaded = (ihData['downloaded'] as num?)?.toInt() ??
+                  (num.tryParse(ihData['downloaded']?.toString() ?? '0') ?? 0).toInt();
               final files = ihData['files'];
               final hasFiles = files is List && files.isNotEmpty;
 
@@ -950,6 +959,43 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                 ),
               ),
               const SizedBox(width: 12),
+              // Torrent Stats Badge (if playing torrent)
+              if (widget.stream.isTorrent) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _torrentPeers > 0
+                          ? const Color(0xFF10B981).withValues(alpha: 0.6)
+                          : Colors.white24,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        IconsaxPlusLinear.arrow_down,
+                        size: 13,
+                        color: _torrentPeers > 0 ? const Color(0xFF34D399) : Colors.white54,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _torrentPeers > 0
+                            ? '$_torrentPeers P • ${_formatSpeed(_torrentDownloadSpeed)}'
+                            : '0 P',
+                        style: TextStyle(
+                          color: _torrentPeers > 0 ? const Color(0xFF34D399) : Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               // Quality Badge
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

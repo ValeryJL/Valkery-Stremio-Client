@@ -74,6 +74,7 @@ class StremioApiService {
 
   /// Syncs addons and watch history for currently stored user session.
   Future<void> syncAccountData() async {
+    if (_storage?.isOfflineMode ?? false) return;
     final key = _storage?.authKey;
     if (key != null && key.isNotEmpty) {
       try {
@@ -158,7 +159,7 @@ class StremioApiService {
   /// Fetches the user's installed addons collection directly from Stremio account.
   /// If the user has addons installed in their account, ONLY those addons are returned.
   Future<List<StremioAddon>> getAddonCollection(String authKey) async {
-    if (authKey.trim().isEmpty) {
+    if (authKey.trim().isEmpty || (_storage?.isOfflineMode ?? false)) {
       return _storage?.addons ?? const [];
     }
     try {
@@ -304,7 +305,7 @@ class StremioApiService {
 
   /// Fetches the user's library and watch history from Stremio datastore (`datastoreGet`).
   Future<List<LibraryWatchState>> fetchWatchHistory(String authKey) async {
-    if (authKey.trim().isEmpty) {
+    if (authKey.trim().isEmpty || (_storage?.isOfflineMode ?? false)) {
       return _storage?.watchHistory ?? const [];
     }
 

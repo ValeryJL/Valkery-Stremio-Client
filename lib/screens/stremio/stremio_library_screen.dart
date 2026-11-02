@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iconsax_plus/iconsax_plus.dart';
@@ -5,10 +6,12 @@ import 'package:iconsax_plus/iconsax_plus.dart';
 import '../../models/stremio/media_item.dart';
 import '../../models/stremio/watch_history_item.dart';
 import '../../providers/stremio_providers.dart';
+import '../../services/stremio/stremio_offline_download_manager.dart';
 import 'stremio_detail_screen.dart';
 
 enum LibraryFilter {
   all('Todos'),
+  offline('Offline'),
   inProgress('En curso'),
   movies('Películas'),
   series('Series'),
@@ -54,7 +57,10 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
     }
   }
 
-  List<LibraryWatchState> _filterItems(List<LibraryWatchState> items) {
+  List<LibraryWatchState> _filterItems(
+    List<LibraryWatchState> items,
+    Set<String> downloadedMediaIds,
+  ) {
     var result = items;
 
     if (_searchQuery.trim().isNotEmpty) {
@@ -64,6 +70,11 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
 
     switch (_activeFilter) {
       case LibraryFilter.all:
+        break;
+      case LibraryFilter.offline:
+        result = result
+            .where((i) => downloadedMediaIds.contains(i.id))
+            .toList();
         break;
       case LibraryFilter.inProgress:
         result = result
@@ -86,9 +97,18 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isOfflineMode = ref.watch(stremioOfflineModeProvider);
+    final downloadsAsync = ref.watch(stremioOfflineDownloadsStreamProvider);
+    final downloads = downloadsAsync.value ??
+        ref.read(stremioOfflineDownloadManagerProvider).allDownloads;
+    final downloadedMediaIds = downloads
+        .where((d) => d.status == OfflineItemStatus.completed)
+        .map((d) => d.id.split('_S')[0])
+        .toSet();
+
     final libraryAsync = ref.watch(stremioLibraryItemsProvider);
     final allLibraryItems = libraryAsync.value ?? <LibraryWatchState>[];
-    final filteredItems = _filterItems(allLibraryItems);
+    final filteredItems = _filterItems(allLibraryItems, downloadedMediaIds);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0E17),
@@ -250,7 +270,8 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
                     itemCount: filteredItems.length,
                     itemBuilder: (context, index) {
                       final item = filteredItems[index];
-                      return _buildLibraryCard(item);
+                      final hasDownloads = downloadedMediaIds.contains(item.id);
+                      return _buildLibraryCard(item, isOfflineMode, hasDownloads);
                     },
                   );
                 },
@@ -323,7 +344,11 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
     );
   }
 
-  Widget _buildLibraryCard(LibraryWatchState item) {
+  Widget _buildLibraryCard(
+    LibraryWatchState item,
+    bool isOfflineMode,
+    bool hasDownloads,
+  ) {
     final media = MediaItem(
       id: item.id,
       name: item.name,
@@ -334,6 +359,16 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () {
+        if (isOfflineMode && !hasDownloads) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Este contenido no tiene descargas locales disponibles.'),
+              duration: Duration(seconds: 2),
+              backgroundColor: Color(0xFF1F1D36),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => StremioDetailScreen(media: media),
@@ -349,17 +384,71 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: item.poster.isNotEmpty
-                      ? Image.network(
-                          item.poster,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _buildFallbackPoster(),
-                        )
-                      : _buildFallbackPoster(),
+                  child: () {
+                    Widget imgWidget = item.poster.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: item.poster,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => _buildFallbackPoster(),
+                            errorWidget: (_, __, ___) => _buildFallbackPoster(),
+                          )
+                        : _buildFallbackPoster();
+
+                    if (isOfflineMode && !hasDownloads) {
+                      imgWidget = ColorFiltered(
+                        colorFilter: const ColorFilter.mode(
+                          Colors.grey,
+                          BlendMode.saturation,
+                        ),
+                        child: Opacity(
+                          opacity: 0.42,
+                          child: imgWidget,
+                        ),
+                      );
+                    }
+                    return imgWidget;
+                  }(),
                 ),
 
-                // Episode badge for series
-                if (item.currentSeason != null && item.currentEpisode != null)
+                // Offline badge in offline mode
+                if (isOfflineMode)
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: hasDownloads
+                            ? const Color(0xFF10B981).withValues(alpha: 0.9)
+                            : Colors.black.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            hasDownloads
+                                ? IconsaxPlusBold.document_download
+                                : IconsaxPlusLinear.cloud_cross,
+                            size: 10,
+                            color: hasDownloads ? Colors.white : Colors.white60,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            hasDownloads ? 'DESCARGADO' : 'SOLO ONLINE',
+                            style: TextStyle(
+                              color: hasDownloads ? Colors.white : Colors.white60,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // Episode badge for series (when not showing offline tag or when online)
+                if (!isOfflineMode && item.currentSeason != null && item.currentEpisode != null)
                   Positioned(
                     top: 6,
                     left: 6,
@@ -489,8 +578,8 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
             item.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: (isOfflineMode && !hasDownloads) ? Colors.white38 : Colors.white,
               fontWeight: FontWeight.w600,
               fontSize: 13,
             ),
