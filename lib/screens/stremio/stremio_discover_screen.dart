@@ -47,7 +47,9 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
     final watchHistoryAsync = ref.watch(stremioWatchHistoryProvider);
 
     final isServerOnline = serverStatusAsync.value?.isOnline ?? false;
-    final historyItems = watchHistoryAsync.value ?? <LibraryWatchState>[];
+    final historyItems = (watchHistoryAsync.value ?? <LibraryWatchState>[])
+        .where((item) => (item.timeOffset > 10 || item.progressRatio > 0.01) && !item.isCompleted)
+        .toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0E17),
@@ -265,6 +267,28 @@ class _StremioDiscoverScreenState extends ConsumerState<StremioDiscoverScreen> {
                               ),
                             ),
                           ),
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () async {
+                                await ref.read(stremioStorageProvider).dismissFromContinueWatching(item.id);
+                                ref.invalidate(stremioWatchHistoryProvider);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.65),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close, size: 14, color: Colors.white70),
+                              ),
+                            ),
+                          ),
+                        ),
                         if (item.progressRatio > 0 && !item.isCompleted)
                           Positioned(
                             bottom: 0,

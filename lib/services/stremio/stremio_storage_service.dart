@@ -446,6 +446,18 @@ class StremioStorageService {
     _notifyWatchHistory();
   }
 
+  Future<void> dismissFromContinueWatching(String mediaId) async {
+    final existing = _watchHistory[mediaId];
+    if (existing != null) {
+      if (existing.isLibraryItem) {
+        final updated = existing.copyWith(timeOffset: 0, timesWatched: 0);
+        await upsertWatchState(updated);
+      } else {
+        await deleteWatchState(mediaId);
+      }
+    }
+  }
+
   Future<void> deleteWatchState(String mediaId) async {
     _watchHistory.remove(mediaId);
     _offlineSyncQueue.remove(mediaId);
