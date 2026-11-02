@@ -56,7 +56,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   bool _isRetrying = false;
   bool _isInitialLoading = true;
   int _openRetryCount = 0;
-  static const int _maxRetries = 4;
+  static const int _maxRetries = 20;
   bool _isMetadataReady = false;
   String _torrentStatusMessage = 'Conectando al enjambre de torrents...';
   Timer? _torrentStatsTimer;
@@ -102,7 +102,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _player = mpv.Player(
       configuration: const mpv.PlayerConfiguration(
         title: 'Valkery',
-        bufferSize: 64 * 1024 * 1024,
+        bufferSize: 128 * 1024 * 1024,
       ),
     );
 
@@ -119,13 +119,18 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         debugPrint('[ValkeryPlayer/error] $err (loading: $_isInitialLoading, retry: $_openRetryCount)');
       }
 
-      // If initial loading failed and we have retries left, wait and re-open cleanly
-      if (_isInitialLoading && _openRetryCount < _maxRetries) {
+      // If initial loading failed and we have retries left (or active torrent swarm downloading), wait and re-open cleanly
+      final bool hasActiveSwarm = _torrentPeers > 0 || _torrentDownloadedBytes > 0;
+      final int effectiveMaxRetries = (kIsWeb || hasActiveSwarm) ? _maxRetries : 10;
+
+      if (_isInitialLoading && _openRetryCount < effectiveMaxRetries) {
         _openRetryCount++;
         setState(() {
-          _torrentStatusMessage = 'Búfer en curso (reintentando conexión $_openRetryCount/$_maxRetries)...';
+          _torrentStatusMessage = hasActiveSwarm
+              ? 'Descargando búfer (${(_torrentDownloadedBytes / (1024 * 1024)).toStringAsFixed(1)} MB cacheados)...'
+              : 'Conectando al búfer (reintentando conexión $_openRetryCount/$effectiveMaxRetries)...';
         });
-        Future.delayed(const Duration(milliseconds: 2000), () {
+        Future.delayed(const Duration(milliseconds: 2500), () {
           if (mounted && _isInitialLoading) {
             _openStreamInPlayer();
           }
@@ -265,9 +270,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           .catchError((_) => http.Response('', 500));
     } catch (_) {}
 
-    // 2. Poll metadata readiness or wait up to 5s before opening media
+    // 2. Poll metadata readiness or wait up to 20s before opening media
     int checks = 0;
-    while (mounted && !_isMetadataReady && checks < 8) {
+    while (mounted && !_isMetadataReady && checks < 35) {
       await Future.delayed(const Duration(milliseconds: 600));
       checks++;
       if (_isMetadataReady || !mounted) break;
@@ -288,6 +293,40 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
     if (kDebugMode) {
       debugPrint('[ValkeryPlayer] Opening stream (attempt ${_openRetryCount + 1}): $url');
+    }
+
+    // On Web, if using HLS, ensure transcode playlist is responsive before attaching to HTML5 video element
+    if (kIsWeb && url.contains('/hlsv2/')) {
+      try {
+        final headRes = await http.head(Uri.parse(url)).timeout(const Duration(seconds: 4));
+        if (headRes.statusCode != 200 && headRes.statusCode != 206) {
+          if (_openRetryCount < _maxRetries) {
+            _openRetryCount++;
+            setState(() {
+              _torrentStatusMessage = 'Preparando transcodificación HLS (reintentando $_openRetryCount/$_maxRetries)...';
+            });
+            Future.delayed(const Duration(milliseconds: 2500), () {
+              if (mounted && _isInitialLoading) {
+                _openStreamInPlayer();
+              }
+            });
+            return;
+          }
+        }
+      } catch (_) {
+        if (_openRetryCount < _maxRetries) {
+          _openRetryCount++;
+          setState(() {
+            _torrentStatusMessage = 'Iniciando búfer HLS (reintentando $_openRetryCount/$_maxRetries)...';
+          });
+          Future.delayed(const Duration(milliseconds: 2500), () {
+            if (mounted && _isInitialLoading) {
+              _openStreamInPlayer();
+            }
+          });
+          return;
+        }
+      }
     }
 
     try {
