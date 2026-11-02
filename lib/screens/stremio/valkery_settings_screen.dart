@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -30,6 +31,7 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
   bool _isLoggingIn = false;
   bool _isInstallingAddon = false;
   bool _isTestingJellyfin = false;
+  bool _hasEditedStremioUrl = false;
   String? _jellyfinError;
 
   @override
@@ -250,6 +252,12 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<SourceCoordinatorState>(sourceCoordinatorProvider, (prev, next) {
+      if (prev?.stremioServerUrl != next.stremioServerUrl && !_hasEditedStremioUrl) {
+        _stremioServerController.text = next.stremioServerUrl;
+      }
+    });
+
     final theme = Theme.of(context);
     final coordinator = ref.watch(sourceCoordinatorProvider);
     final serverStatusAsync = ref.watch(stremioServerStatusStreamProvider);
@@ -303,16 +311,22 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _stremioServerController,
+                  onChanged: (_) => _hasEditedStremioUrl = true,
                   decoration: InputDecoration(
                     labelText: 'URL del Streaming Server',
-                    hintText: 'http://127.0.0.1:11470',
+                    hintText: SourceCoordinatorState.defaultStremioServerUrl,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.save),
+                      tooltip: 'Guardar URL',
                       onPressed: () {
+                        final newUrl = _stremioServerController.text.trim();
                         ref
                             .read(sourceCoordinatorProvider.notifier)
-                            .setStremioServerUrl(_stremioServerController.text);
+                            .setStremioServerUrl(newUrl);
+                        ref
+                            .read(stremioServerProcessManagerProvider)
+                            .setCustomServerUrl(newUrl);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Servidor Stremio actualizado')),
                         );
@@ -320,6 +334,32 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                     ),
                   ),
                 ),
+                if (kIsWeb) ...[
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      icon: const Icon(IconsaxPlusLinear.refresh, size: 14),
+                      label: const Text('Restablecer al servidor actual', style: TextStyle(fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        foregroundColor: const Color(0xFF8B5CF6),
+                      ),
+                      onPressed: () {
+                        final defaultUrl = SourceCoordinatorState.defaultStremioServerUrl;
+                        _hasEditedStremioUrl = false;
+                        _stremioServerController.text = defaultUrl;
+                        ref
+                            .read(sourceCoordinatorProvider.notifier)
+                            .setStremioServerUrl(defaultUrl);
+                        ref
+                            .read(stremioServerProcessManagerProvider)
+                            .setCustomServerUrl(defaultUrl);
+                      },
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Text(
                   'El servidor integrado gestiona la reproducción torrent y cache en segundo plano.',

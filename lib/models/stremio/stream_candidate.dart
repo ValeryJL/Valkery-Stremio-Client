@@ -112,14 +112,22 @@ class StreamCandidate {
   }
 
   String get playbackUrl {
-    final host = kIsWeb ? (Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1') : '127.0.0.1';
-    return playbackUrlFor('http://$host:11470');
+    final base = kIsWeb
+        ? (Uri.base.origin.isNotEmpty && !Uri.base.origin.startsWith('file://')
+            ? Uri.base.origin
+            : 'http://127.0.0.1:11470')
+        : 'http://127.0.0.1:11470';
+    return playbackUrlFor(base);
   }
 
   /// Built-in Stremio Engine HLS transcode URL (converts MKV/HEVC to browser HLS on-the-fly)
   String get hlsPlaybackUrl {
-    final host = kIsWeb ? (Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1') : '127.0.0.1';
-    return hlsPlaybackUrlFor('http://$host:11470');
+    final base = kIsWeb
+        ? (Uri.base.origin.isNotEmpty && !Uri.base.origin.startsWith('file://')
+            ? Uri.base.origin
+            : 'http://127.0.0.1:11470')
+        : 'http://127.0.0.1:11470';
+    return hlsPlaybackUrlFor(base);
   }
 
   /// Determines if this stream format is likely natively playable in a standard web browser without external player.

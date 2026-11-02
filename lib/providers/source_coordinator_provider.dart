@@ -20,17 +20,29 @@ class SourceCoordinatorState {
   final String? jellyfinServerVersion;
   final ValkeryPlayerType preferredPlayer;
 
-  const SourceCoordinatorState({
+  static String get defaultStremioServerUrl {
+    if (kIsWeb) {
+      final origin = Uri.base.origin;
+      if (origin.isNotEmpty && !origin.startsWith('file://')) {
+        return origin;
+      }
+    }
+    return 'http://127.0.0.1:11470';
+  }
+
+  SourceCoordinatorState({
     this.stremioEnabled = true,
     this.jellyfinEnabled = false,
     this.stremioGuestMode = true,
     this.jellyfinGuestMode = true,
-    this.stremioServerUrl = 'http://127.0.0.1:11470',
+    String? stremioServerUrl,
     this.jellyfinServerUrl = '',
     this.jellyfinServerName,
     this.jellyfinServerVersion,
     this.preferredPlayer = ValkeryPlayerType.mediaKit,
-  });
+  }) : stremioServerUrl = (stremioServerUrl != null && stremioServerUrl.isNotEmpty)
+            ? stremioServerUrl
+            : defaultStremioServerUrl;
 
   bool get isJellyfinActive =>
       jellyfinEnabled && jellyfinServerUrl.trim().isNotEmpty;
@@ -74,7 +86,7 @@ class SourceCoordinatorNotifier extends StateNotifier<SourceCoordinatorState> {
   static const _keyJellyfinVersion = 'valkery_jellyfin_server_version';
   static const _keyPlayerType = 'valkery_preferred_player_type';
 
-  SourceCoordinatorNotifier() : super(const SourceCoordinatorState()) {
+  SourceCoordinatorNotifier() : super(SourceCoordinatorState()) {
     _loadFromPreferences();
   }
 
@@ -87,9 +99,21 @@ class SourceCoordinatorNotifier extends StateNotifier<SourceCoordinatorState> {
       final jellyName = prefs.getString(_keyJellyfinName);
       final jellyVersion = prefs.getString(_keyJellyfinVersion);
       final stremioGuest = prefs.getBool(_keyStremioGuest) ?? true;
-      final defaultHost = kIsWeb ? (Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1') : '127.0.0.1';
-      final defaultServer = 'http://$defaultHost:11470';
-      final serverUrl = prefs.getString(_keyStremioServer) ?? defaultServer;
+
+      final savedServer = prefs.getString(_keyStremioServer);
+      String serverUrl;
+      if (savedServer != null && savedServer.trim().isNotEmpty) {
+        if (kIsWeb &&
+            (savedServer == 'http://127.0.0.1:11470' ||
+             savedServer == 'http://localhost:11470' ||
+             savedServer.contains(':11470'))) {
+          serverUrl = SourceCoordinatorState.defaultStremioServerUrl;
+        } else {
+          serverUrl = savedServer.trim();
+        }
+      } else {
+        serverUrl = SourceCoordinatorState.defaultStremioServerUrl;
+      }
       final playerIndex = prefs.getInt(_keyPlayerType) ?? 0;
 
       state = SourceCoordinatorState(
