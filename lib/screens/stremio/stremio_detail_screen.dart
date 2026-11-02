@@ -1003,18 +1003,6 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
       ),
     );
   }
-                        fontSize: 11,
-                        color: Colors.white.withValues(alpha: 0.6),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildEpisodePlaceholder(EpisodeItem ep) {
     return Container(

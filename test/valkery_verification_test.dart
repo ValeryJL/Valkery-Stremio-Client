@@ -36,7 +36,7 @@ void main() {
     });
 
     test('SourceCoordinator dynamically switches dual source and zero clutter on Jellyfin activation', () {
-      var state = const SourceCoordinatorState();
+      var state = SourceCoordinatorState();
       expect(state.isJellyfinActive, isFalse);
       expect(state.isStremioOnly, isTrue);
 
