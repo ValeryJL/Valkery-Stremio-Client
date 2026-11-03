@@ -1,16 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:iconsax_plus/iconsax_plus.dart';
 
-import '../../models/stremio/stremio_user.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/source_coordinator_provider.dart';
 import '../../providers/stremio_providers.dart';
-import '../../providers/user_provider.dart';
 
 class ValkerySettingsScreen extends ConsumerStatefulWidget {
   const ValkerySettingsScreen({super.key});
@@ -21,7 +15,6 @@ class ValkerySettingsScreen extends ConsumerStatefulWidget {
 
 class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
   late final TextEditingController _stremioServerController;
-  late final TextEditingController _jellyfinServerController;
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _authKeyController = TextEditingController();
@@ -30,22 +23,18 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
   int _stremioAuthTab = 0; // 0: Login, 1: Register, 2: AuthKey
   bool _isLoggingIn = false;
   bool _isInstallingAddon = false;
-  bool _isTestingJellyfin = false;
   bool _hasEditedStremioUrl = false;
-  String? _jellyfinError;
 
   @override
   void initState() {
     super.initState();
     final coordinator = ref.read(sourceCoordinatorProvider);
     _stremioServerController = TextEditingController(text: coordinator.stremioServerUrl);
-    _jellyfinServerController = TextEditingController(text: coordinator.jellyfinServerUrl);
   }
 
   @override
   void dispose() {
     _stremioServerController.dispose();
-    _jellyfinServerController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _authKeyController.dispose();
@@ -175,81 +164,6 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
     }
   }
 
-  Future<void> _testAndConnectJellyfin() async {
-    final raw = _jellyfinServerController.text.trim();
-    if (raw.isEmpty) {
-      setState(() => _jellyfinError = 'Ingresa la URL del servidor Jellyfin');
-      return;
-    }
-
-    var url = raw;
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'http://$url';
-    }
-    url = url.replaceAll(RegExp(r'/+$'), '');
-
-    setState(() {
-      _isTestingJellyfin = true;
-      _jellyfinError = null;
-    });
-
-    try {
-      final response = await http
-          .get(Uri.parse('$url/System/Info/Public'))
-          .timeout(const Duration(seconds: 4));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final serverName = (data is Map<String, dynamic>)
-            ? data['ServerName']?.toString() ?? 'Jellyfin Server'
-            : 'Jellyfin Server';
-        final version = (data is Map<String, dynamic>)
-            ? data['Version']?.toString() ?? ''
-            : '';
-
-        await ref.read(sourceCoordinatorProvider.notifier).setJellyfinServer(
-          url: url,
-          serverName: serverName,
-          version: version,
-        );
-
-        await ref.read(authProvider.notifier).setServer(url);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Servidor conectado: $serverName ($version)'),
-              backgroundColor: const Color(0xFF8B5CF6),
-            ),
-          );
-        }
-      } else {
-        setState(() {
-          _jellyfinError = 'El servidor respondió con código ${response.statusCode}';
-        });
-      }
-    } catch (_) {
-      setState(() {
-        _jellyfinError = 'No se pudo conectar al servidor. Revisa la URL y que esté accesible.';
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _isTestingJellyfin = false);
-      }
-    }
-  }
-
-  Future<void> _disconnectJellyfin() async {
-    await ref.read(sourceCoordinatorProvider.notifier).disconnectJellyfin();
-    await ref.read(authProvider.notifier).logOutUser();
-    _jellyfinServerController.clear();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Servidor Jellyfin desconectado')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     ref.listen<SourceCoordinatorState>(sourceCoordinatorProvider, (prev, next) {
@@ -264,7 +178,6 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
     final storage = ref.watch(stremioStorageProvider);
     final isServerOnline = serverStatusAsync.value?.isOnline ?? false;
     final currentUser = storage.currentUser;
-    final jellyfinUser = ref.watch(userProvider);
     final addons = storage.addons;
 
     return Scaffold(
@@ -643,110 +556,6 @@ class _ValkerySettingsScreenState extends ConsumerState<ValkerySettingsScreen> {
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-
-          // 5. Jellyfin Integration
-          _buildCard(
-            title: 'Servidor Jellyfin (Opcional)',
-            icon: IconsaxPlusBold.cloud_connection,
-            child: coordinator.isJellyfinActive
-                ? Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green.withValues(alpha: 0.25)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const CircleAvatar(radius: 5, backgroundColor: Colors.green),
-                            const SizedBox(width: 8),
-                            Text(
-                              coordinator.jellyfinServerName ?? 'Servidor Jellyfin',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-                            if (coordinator.jellyfinServerVersion != null &&
-                                coordinator.jellyfinServerVersion!.isNotEmpty) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'v${coordinator.jellyfinServerVersion}',
-                                  style: const TextStyle(fontSize: 11, color: Colors.white70),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          coordinator.jellyfinServerUrl,
-                          style: const TextStyle(fontSize: 13, color: Colors.white70),
-                        ),
-                        if (jellyfinUser != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Sesión de usuario: ${jellyfinUser.name}',
-                            style: const TextStyle(fontSize: 12, color: const Color(0xFF8B5CF6)),
-                          ),
-                        ],
-                        const SizedBox(height: 14),
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.redAccent,
-                            side: const BorderSide(color: Colors.redAccent),
-                          ),
-                          icon: const Icon(Icons.link_off, size: 16),
-                          label: const Text('Desconectar Servidor'),
-                          onPressed: _disconnectJellyfin,
-                        ),
-                      ],
-                    ),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Ingresa la dirección de tu servidor Jellyfin. Si la URL es accesible, se activará la sección de Jellyfin automáticamente.',
-                        style: TextStyle(fontSize: 13, color: Colors.white70),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _jellyfinServerController,
-                        decoration: InputDecoration(
-                          labelText: 'Dirección del Servidor Jellyfin',
-                          hintText: 'http://192.168.1.100:8096',
-                          prefixIcon: const Icon(IconsaxPlusLinear.global),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                          errorText: _jellyfinError,
-                        ),
-                        onSubmitted: (_) => _testAndConnectJellyfin(),
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF8B5CF6),
-                        ),
-                        icon: _isTestingJellyfin
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.link),
-                        label: const Text('Probar y Conectar'),
-                        onPressed: _isTestingJellyfin ? null : _testAndConnectJellyfin,
-                      ),
-                    ],
-                  ),
           ),
         ],
       ),

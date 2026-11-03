@@ -35,28 +35,33 @@ void main() {
       expect(manager.currentStatus.isOnline, isFalse);
     });
 
-    test('SourceCoordinator dynamically switches dual source and zero clutter on Jellyfin activation', () {
-      var state = SourceCoordinatorState();
-      expect(state.isJellyfinActive, isFalse);
+    test('SourceCoordinator maintains clean Stremio-only state', () {
+      const state = SourceCoordinatorState();
+      expect(state.stremioEnabled, isTrue);
       expect(state.isStremioOnly, isTrue);
+    });
 
-      // Activating with valid server URL
-      state = state.copyWith(
-        jellyfinEnabled: true,
-        jellyfinServerUrl: 'http://192.168.1.100:8096',
-        jellyfinServerName: 'Home Jellyfin',
-      );
-      expect(state.isJellyfinActive, isTrue);
-      expect(state.isDualSource, isTrue);
-      expect(state.isStremioOnly, isFalse);
+    test('Offline mode watch history automatically queues for Stremio cloud sync', () async {
+      final storage = StremioStorageService(inMemory: true);
+      await storage.init();
+      await storage.setOfflineMode(true);
+      expect(storage.isOfflineMode, isTrue);
 
-      // Disconnecting reverts to clean Stremio-only view
-      state = state.copyWith(
-        jellyfinEnabled: false,
-        jellyfinServerUrl: '',
+      await storage.upsertWatchState(
+        LibraryWatchState(
+          id: 'tt0111161',
+          name: 'The Shawshank Redemption',
+          type: 'movie',
+          timeOffset: 3600000,
+          duration: 7200000,
+          lastWatched: DateTime.now(),
+        ),
       );
-      expect(state.isJellyfinActive, isFalse);
-      expect(state.isStremioOnly, isTrue);
+      expect(storage.pendingOfflineSyncCount, equals(1));
+      expect(storage.pendingOfflineSyncIds, contains('tt0111161'));
+
+      await storage.clearPendingOfflineSync('tt0111161');
+      expect(storage.pendingOfflineSyncCount, equals(0));
     });
 
     test('StreamCandidate generates valid playback URL for local Stremio server with default and fallback trackers', () {

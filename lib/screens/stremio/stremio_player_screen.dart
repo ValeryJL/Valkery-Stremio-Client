@@ -11,15 +11,13 @@ import 'package:iconsax_plus/iconsax_plus.dart';
 import 'package:media_kit/media_kit.dart' as mpv;
 import 'package:media_kit_video/media_kit_video.dart';
 
-import 'package:fladder/util/adaptive_layout/adaptive_layout.dart';
-import 'package:fladder/widgets/full_screen_helpers/full_screen_wrapper.dart';
-
 import '../../models/stremio/media_item.dart' as stremio_model;
 import '../../models/stremio/stream_candidate.dart';
 import '../../models/stremio/watch_history_item.dart';
 import '../../providers/stremio_providers.dart';
 import '../../services/stremio/stremio_offline_download_manager.dart';
 import '../../util/external_player_launcher.dart';
+import '../../util/valkery_fullscreen_helper.dart';
 import 'valkery_desktop_title_bar.dart';
 import 'web_hls_bridge.dart';
 import '../../providers/source_coordinator_provider.dart';
@@ -990,7 +988,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                 _showControls();
                 return;
               }
-              if (AdaptiveLayout.isDesktop(context) || kIsWeb) {
+              if (fullScreenHelper.isDesktopPlatform || kIsWeb) {
                 // Single click on desktop/web toggles play/pause
                 _playOrPauseUnified();
                 _showControls();
@@ -1683,7 +1681,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
               ),
               onPressed: _toggleMute,
             ),
-            if (AdaptiveLayout.isDesktop(context) || kIsWeb)
+            if (fullScreenHelper.isDesktopPlatform || kIsWeb)
               SizedBox(
                 width: 90,
                 child: SliderTheme(

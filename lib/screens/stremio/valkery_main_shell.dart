@@ -7,13 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iconsax_plus/iconsax_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../providers/source_coordinator_provider.dart';
 import '../../providers/stremio_providers.dart';
 import 'stremio_discover_screen.dart';
 import 'stremio_library_screen.dart';
 import 'stremio_offline_screen.dart';
 import 'valkery_desktop_title_bar.dart';
-import 'valkery_jellyfin_view.dart';
 import 'valkery_settings_screen.dart';
 
 class ValkeryMainShell extends ConsumerStatefulWidget {
@@ -29,7 +27,6 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final coordinator = ref.watch(sourceCoordinatorProvider);
     final isOfflineMode = ref.watch(stremioOfflineModeProvider);
     final pendingSyncCount = ref.watch(stremioPendingOfflineSyncProvider).length;
     final isDesktop = MediaQuery.of(context).size.width > 768;
@@ -78,8 +75,6 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
       ),
       if (!kIsWeb)
         const StremioOfflineScreen(),
-      if (coordinator.isJellyfinActive)
-        const ValkeryJellyfinView(),
       const ValkerySettingsScreen(),
     ];
 
@@ -123,12 +118,6 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
           icon: offlineIcon,
           selectedIcon: offlineSelectedIcon,
           label: 'Offline',
-        ),
-      if (coordinator.isJellyfinActive)
-        const NavigationDestination(
-          icon: Icon(IconsaxPlusLinear.video_square),
-          selectedIcon: Icon(IconsaxPlusBold.video_square, color: Color(0xFF8B5CF6)),
-          label: 'Jellyfin',
         ),
       const NavigationDestination(
         icon: Icon(IconsaxPlusLinear.setting_2),
@@ -187,13 +176,6 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
                   icon: offlineIcon,
                   selectedIcon: offlineSelectedIcon,
                   label: const Text('Offline'),
-                ),
-              if (coordinator.isJellyfinActive)
-                const NavigationRailDestination(
-                  icon: Icon(IconsaxPlusLinear.video_square),
-                  selectedIcon:
-                      Icon(IconsaxPlusBold.video_square, color: Color(0xFF8B5CF6)),
-                  label: Text('Jellyfin'),
                 ),
               const NavigationRailDestination(
                 icon: Icon(IconsaxPlusLinear.setting_2),
