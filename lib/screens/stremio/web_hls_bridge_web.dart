@@ -180,7 +180,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
     }));
   }
 
-  void _updateActiveSubtitleCue(double currentTimeSec) {
+  void _updateActiveSubtitleCue(num currentTimeSec) {
     if (_parsedCues.isEmpty) {
       if (_currentSubtitleCueText != null) {
         _currentSubtitleCueText = null;
