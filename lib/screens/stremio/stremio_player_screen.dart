@@ -192,8 +192,8 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           setState(() {
             _embeddedSubtitles = subs;
           });
-          // Auto-select embedded Spanish subtitle if no subtitle track is active yet
-          if (_currentSubtitleTrack.id == 'no') {
+          // Auto-select embedded Spanish subtitle if external subtitles finished empty and no track active
+          if (_currentSubtitleTrack.id == 'no' && !_isLoadingExternalSubs && _externalSubtitles.isEmpty) {
             final spanishEmbedded = subs.where((s) {
               final l = (s.language ?? '').toLowerCase();
               final t = (s.title ?? '').toLowerCase();
@@ -628,15 +628,26 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           _externalSubtitles = subs;
           _isLoadingExternalSubs = false;
         });
-        // Auto-select first Spanish subtitle (or first available) if none active yet
-        if (_currentSubtitleTrack.id == 'no' && subs.isNotEmpty) {
-          final preferred = subs.where((s) => s.isSpanish).firstOrNull ?? subs.first;
-          final autoTrack = mpv.SubtitleTrack.uri(
-            preferred.url,
-            title: preferred.displayTitle,
-            language: preferred.lang,
-          );
-          _applySubtitleTrack(autoTrack);
+        // Auto-select first Spanish subtitle (or fallback to embedded Spanish) if none active yet
+        if (_currentSubtitleTrack.id == 'no') {
+          if (subs.isNotEmpty) {
+            final preferred = subs.where((s) => s.isSpanish).firstOrNull ?? subs.first;
+            final autoTrack = mpv.SubtitleTrack.uri(
+              preferred.url,
+              title: preferred.displayTitle,
+              language: preferred.lang,
+            );
+            _applySubtitleTrack(autoTrack);
+          } else if (_embeddedSubtitles.isNotEmpty) {
+            final spanishEmbedded = _embeddedSubtitles.where((s) {
+              final l = (s.language ?? '').toLowerCase();
+              final t = (s.title ?? '').toLowerCase();
+              return l.contains('spa') || l == 'es' || l.contains('lat') || t.contains('espa') || t.contains('spa');
+            }).firstOrNull;
+            if (spanishEmbedded != null) {
+              _applySubtitleTrack(spanishEmbedded);
+            }
+          }
         }
       }
     } catch (_) {
@@ -897,6 +908,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, result) {
+        if (kIsWeb) {
+          _webBridge?.pause();
+        } else {
+          _player?.pause();
+        }
         _savePlaybackProgress();
       },
       child: Focus(

@@ -56,6 +56,8 @@ class _RealWebHlsBridge implements WebHlsBridge {
   final List<StreamSubscription> _domSubscriptions = [];
 
   bool _isPlaying = false;
+  bool _hasAutoPlayedOnce = false;
+  bool _userPaused = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   Duration _buffer = Duration.zero;
@@ -65,6 +67,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
   List<_SubtitleCue> _parsedCues = [];
   String? _currentSubtitleCueText;
   int _subtitleLoadGeneration = 0;
+  Timer? _embeddedSubPollTimer;
 
   _RealWebHlsBridge() {
     _viewId = _nextViewId++;
@@ -108,11 +111,21 @@ class _RealWebHlsBridge implements WebHlsBridge {
 
   void _bindVideoEvents() {
     _domSubscriptions.add(_videoElement.onPlay.listen((_) {
+      if (_disposed || _userPaused) {
+        _videoElement.pause();
+        return;
+      }
+      _hasAutoPlayedOnce = true;
       _isPlaying = true;
       if (!_disposed) _playingController.add(true);
     }));
 
     _domSubscriptions.add(_videoElement.onPlaying.listen((_) {
+      if (_disposed || _userPaused) {
+        _videoElement.pause();
+        return;
+      }
+      _hasAutoPlayedOnce = true;
       _isPlaying = true;
       if (!_disposed) _playingController.add(true);
     }));
@@ -137,13 +150,15 @@ class _RealWebHlsBridge implements WebHlsBridge {
     _domSubscriptions.add(_videoElement.onLoadedMetadata.listen((_) {
       _updateDuration();
       _jumpInitialPtsGapIfNeeded();
-      _attemptAutoPlay();
+      if (!_hasAutoPlayedOnce && !_userPaused) {
+        _attemptAutoPlay();
+      }
     }));
 
     _domSubscriptions.add(_videoElement.onCanPlay.listen((_) {
       _updateDuration();
       _jumpInitialPtsGapIfNeeded();
-      if (!_isPlaying) {
+      if (!_hasAutoPlayedOnce && !_userPaused && !_isPlaying) {
         _attemptAutoPlay();
       }
     }));
@@ -243,13 +258,19 @@ class _RealWebHlsBridge implements WebHlsBridge {
   }
 
   void _attemptAutoPlay() {
-    if (_disposed) return;
+    if (_disposed || _userPaused || _hasAutoPlayedOnce) return;
+    _hasAutoPlayedOnce = true;
     try {
       final playPromise = _videoElement.play();
       playPromise.then((_) {
+        if (_disposed || _userPaused) {
+          _videoElement.pause();
+          return;
+        }
         _isPlaying = true;
         if (!_disposed) _playingController.add(true);
       }).catchError((err) {
+        if (_disposed || _userPaused) return;
         final errStr = err.toString().toLowerCase();
         if (kDebugMode) {
           debugPrint('[ValkeryWebHls] Unmuted play() rejected ($err); falling back to muted autoplay');
@@ -262,6 +283,10 @@ class _RealWebHlsBridge implements WebHlsBridge {
           _isAutoMuted = true;
           if (!_disposed) _autoMutedController.add(true);
           _videoElement.play().then((_) {
+            if (_disposed || _userPaused) {
+              _videoElement.pause();
+              return;
+            }
             _isPlaying = true;
             if (!_disposed) _playingController.add(true);
           }).catchError((e2) {
@@ -280,6 +305,8 @@ class _RealWebHlsBridge implements WebHlsBridge {
     _currentUrl = hlsUrl;
     _fallbackDirectUrl = fallbackDirectUrl;
     _triedDirectFallback = false;
+    _hasAutoPlayedOnce = false;
+    _userPaused = false;
     _networkErrorRetries = 0;
     _mediaErrorRetries = 0;
 
@@ -376,7 +403,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
       }),
     ]);
 
-    // Listen to FRAG_BUFFERED -> jump initial PTS gap and ensure playback starts
+    // Listen to FRAG_BUFFERED -> jump initial PTS gap and ensure initial playback starts once
     js_util.callMethod(hls, 'on', [
       'hlsFragBuffered',
       js_util.allowInterop((Object? event, Object? data) {
@@ -384,7 +411,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
         _updateDuration();
         _updateBuffer();
         _jumpInitialPtsGapIfNeeded();
-        if (!_isPlaying) {
+        if (!_hasAutoPlayedOnce && !_userPaused && !_isPlaying) {
           _attemptAutoPlay();
         }
       }),
@@ -515,6 +542,8 @@ class _RealWebHlsBridge implements WebHlsBridge {
   @override
   void play() {
     if (_disposed) return;
+    _userPaused = false;
+    _hasAutoPlayedOnce = true;
     _jumpInitialPtsGapIfNeeded();
     if (_isAutoMuted) {
       _videoElement.muted = false;
@@ -523,9 +552,14 @@ class _RealWebHlsBridge implements WebHlsBridge {
       _autoMutedController.add(false);
     }
     _videoElement.play().then((_) {
+      if (_disposed || _userPaused) {
+        _videoElement.pause();
+        return;
+      }
       _isPlaying = true;
       if (!_disposed) _playingController.add(true);
     }).catchError((_) {
+      if (_disposed || _userPaused) return;
       _videoElement.muted = true;
       _isAutoMuted = true;
       if (!_disposed) _autoMutedController.add(true);
@@ -536,6 +570,8 @@ class _RealWebHlsBridge implements WebHlsBridge {
   @override
   void pause() {
     if (_disposed) return;
+    _userPaused = true;
+    _hasAutoPlayedOnce = true;
     _videoElement.pause();
     _isPlaying = false;
     _playingController.add(false);
@@ -553,6 +589,8 @@ class _RealWebHlsBridge implements WebHlsBridge {
   @override
   void unmuteFromUserGesture(double volume0to100) {
     if (_disposed) return;
+    _userPaused = false;
+    _hasAutoPlayedOnce = true;
     _targetVolume = (volume0to100 / 100.0).clamp(0.0, 1.0);
     _videoElement.muted = false;
     _videoElement.volume = _targetVolume;
@@ -635,6 +673,8 @@ class _RealWebHlsBridge implements WebHlsBridge {
   Future<void> setSubtitleTrack(mpv.SubtitleTrack track, {String? serverBaseUrl}) async {
     if (_disposed) return;
     final gen = ++_subtitleLoadGeneration;
+    _embeddedSubPollTimer?.cancel();
+    _embeddedSubPollTimer = null;
 
     _parsedCues = [];
     _currentSubtitleCueText = null;
@@ -644,16 +684,49 @@ class _RealWebHlsBridge implements WebHlsBridge {
       return;
     }
 
-    final urlsToTry = <String>[];
-
     // 1. Embedded HLS subtitle track (`hls_sub_<index>` -> `/hlsv2/<session>/sub<index>.vtt`)
     if (track.id.startsWith('hls_sub_') && _currentUrl != null) {
       final idx = int.tryParse(track.id.substring('hls_sub_'.length));
       if (idx != null && idx >= 0) {
         final baseHlsDir = _currentUrl!.split('?').first.replaceAll(RegExp(r'/[^/]+$'), '');
-        urlsToTry.add('$baseHlsDir/sub$idx.vtt');
+        final embeddedVttUrl = '$baseHlsDir/sub$idx.vtt';
+
+        Future<void> fetchEmbeddedVtt() async {
+          if (_disposed || gen != _subtitleLoadGeneration) return;
+          try {
+            final cacheBusted = '$embeddedVttUrl?_t=${DateTime.now().millisecondsSinceEpoch}';
+            final res = await http.get(Uri.parse(cacheBusted)).timeout(const Duration(seconds: 15));
+            if (_disposed || gen != _subtitleLoadGeneration) return;
+            if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
+              final content = utf8.decode(res.bodyBytes, allowMalformed: true);
+              final cues = _parseSubtitlesToCues(content);
+              if (cues.isNotEmpty && cues.length >= _parsedCues.length) {
+                _parsedCues = cues;
+                final curSec = _videoElement.currentTime;
+                if (!curSec.isNaN && !curSec.isInfinite) {
+                  _updateActiveSubtitleCue(curSec);
+                }
+              }
+            }
+          } catch (_) {}
+        }
+
+        await fetchEmbeddedVtt();
+        if (!_disposed && gen == _subtitleLoadGeneration) {
+          // Periodically refresh embedded VTT as background ffmpeg flushes new cues from the MKV stream
+          _embeddedSubPollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+            if (_disposed || gen != _subtitleLoadGeneration) {
+              _embeddedSubPollTimer?.cancel();
+              return;
+            }
+            fetchEmbeddedVtt();
+          });
+        }
+        return;
       }
     }
+
+    final urlsToTry = <String>[];
 
     // 2. External URI subtitle track (OpenSubtitles / Addons)
     if (track.id.startsWith('http://') || track.id.startsWith('https://')) {
@@ -794,6 +867,12 @@ class _RealWebHlsBridge implements WebHlsBridge {
   void _destroyHls() {
     if (_hlsInstance != null) {
       try {
+        js_util.callMethod(_hlsInstance!, 'stopLoad', const []);
+      } catch (_) {}
+      try {
+        js_util.callMethod(_hlsInstance!, 'detachMedia', const []);
+      } catch (_) {}
+      try {
         js_util.callMethod(_hlsInstance!, 'destroy', const []);
       } catch (_) {}
       _hlsInstance = null;
@@ -803,6 +882,10 @@ class _RealWebHlsBridge implements WebHlsBridge {
   @override
   void dispose() {
     _disposed = true;
+    _userPaused = true;
+    _hasAutoPlayedOnce = true;
+    _embeddedSubPollTimer?.cancel();
+    _embeddedSubPollTimer = null;
     for (final sub in _domSubscriptions) {
       sub.cancel();
     }
@@ -811,9 +894,12 @@ class _RealWebHlsBridge implements WebHlsBridge {
     _destroyHls();
     try {
       _videoElement.pause();
+      _videoElement.muted = true;
       _videoElement.removeAttribute('src');
+      _videoElement.src = '';
       _videoElement.load();
       _videoElement.remove();
+      _containerElement.remove();
     } catch (_) {}
     _playingController.close();
     _positionController.close();

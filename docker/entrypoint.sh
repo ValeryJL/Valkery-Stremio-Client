@@ -6,6 +6,67 @@ echo " Starting Valkery Stremio Integrated Server"
 echo " Web UI Port: 8080 | Stremio Daemon Port: 11470"
 echo "=========================================================="
 
+# Install smart ffmpeg wrapper so embedded MKV subtitle extraction (*.vtt.tmp)
+# flushes buffered cues immediately without blocking on 100% torrent download
+if [ ! -f /usr/bin/ffmpeg.real ] && [ -f /usr/bin/ffmpeg ]; then
+  mv /usr/bin/ffmpeg /usr/bin/ffmpeg.real
+  cat > /usr/bin/ffmpeg <<'FFWRAP'
+#!/bin/sh
+LAST_ARG=""
+for arg in "$@"; do
+  LAST_ARG="$arg"
+done
+
+case "$LAST_ARG" in
+  *.vtt.tmp)
+    # Rebuild args inserting -flush_packets 1 right before the output file
+     set -- "$@"
+    NEW_ARGS=""
+    i=1
+    total=$#
+    for arg in "$@"; do
+      if [ "$i" -eq "$total" ]; then
+        set -- "$@" -flush_packets 1 "$arg"
+      else
+        set -- "$@" "$arg"
+      fi
+      shift
+      i=$((i + 1))
+    done
+
+    # Launch real ffmpeg in background session so it continues flushing cues as MKV downloads
+    nohup timeout -s INT 1800 /usr/bin/ffmpeg.real "$@" >/dev/null 2>&1 < /dev/null &
+    FF_PID=$!
+
+    # Wait up to 2.5s for initial WEBVTT header + buffered cues to flush to disk
+    waited=0
+    while [ "$waited" -lt 25 ]; do
+      if [ -s "$LAST_ARG" ]; then
+        # Give it 400ms more to flush all currently buffered cues
+        sleep 0.4
+        break
+      fi
+      if ! kill -0 "$FF_PID" 2>/dev/null; then
+        break
+      fi
+      sleep 0.1
+      waited=$((waited + 1))
+    done
+
+    # Ensure valid WEBVTT file exists so rivulet-engine renames it and returns 200 OK
+    if [ ! -s "$LAST_ARG" ]; then
+      printf "WEBVTT\n\n" > "$LAST_ARG"
+    fi
+    exit 0
+    ;;
+  *)
+    exec /usr/bin/ffmpeg.real "$@"
+    ;;
+esac
+FFWRAP
+  chmod +x /usr/bin/ffmpeg
+fi
+
 # Stremio environment defaults
 export FFMPEG_BIN="${FFMPEG_BIN:-/usr/bin/ffmpeg}"
 export FFPROBE_BIN="${FFPROBE_BIN:-/usr/bin/ffprobe}"
