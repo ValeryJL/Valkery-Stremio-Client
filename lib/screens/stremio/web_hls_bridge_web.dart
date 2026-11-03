@@ -137,7 +137,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
       _updateBuffer();
     }));
 
-    _domSubscriptions.add(html.Element.progressEvent.forTarget(_videoElement).listen((_) {
+    _domSubscriptions.add(_videoElement.on['progress'].listen((_) {
       _updateBuffer();
     }));
 
