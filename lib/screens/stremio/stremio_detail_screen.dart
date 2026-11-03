@@ -14,6 +14,7 @@ import '../../providers/source_coordinator_provider.dart';
 import '../../providers/stremio_providers.dart';
 import '../../services/stremio/stremio_offline_download_manager.dart';
 import '../../util/external_player_launcher.dart';
+import '../../util/valkery_fullscreen_helper.dart';
 import '../../util/web_image_helper.dart';
 import 'stremio_player_screen.dart';
 import 'valkery_desktop_title_bar.dart';
@@ -313,6 +314,11 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                     episode: _isSeries ? _selectedEpisode : null,
                   )));
                 },
+              ),
+              IconButton(
+                icon: const Icon(IconsaxPlusLinear.maximize_3, size: 18, color: Colors.white70),
+                tooltip: 'Pantalla completa',
+                onPressed: () => fullScreenHelper.toggleFullScreen(),
               ),
             ],
           ),
@@ -870,12 +876,16 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
           borderRadius: BorderRadius.circular(14),
           color: isSelected
               ? const Color(0xFF8B5CF6).withValues(alpha: 0.15)
-              : Colors.white.withValues(alpha: 0.05),
+              : (isDownloaded
+                  ? const Color(0xFF10B981).withValues(alpha: 0.10)
+                  : Colors.white.withValues(alpha: 0.05)),
           border: Border.all(
             color: isSelected
                 ? const Color(0xFF8B5CF6)
-                : Colors.white.withValues(alpha: 0.12),
-            width: isSelected ? 2 : 1,
+                : (isDownloaded
+                    ? const Color(0xFF10B981).withValues(alpha: 0.70)
+                    : Colors.white.withValues(alpha: 0.12)),
+            width: isSelected ? 2 : (isDownloaded ? 1.5 : 1),
           ),
         ),
         clipBehavior: Clip.antiAlias,
@@ -946,7 +956,7 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                     ),
                   ),
                   // Offline Status Pill (Top Right)
-                  if (isOfflineMode)
+                  if (isDownloaded || isOfflineMode)
                     Positioned(
                       top: 6,
                       right: 6,
@@ -954,7 +964,7 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: isDownloaded
-                              ? const Color(0xFF10B981).withValues(alpha: 0.9)
+                              ? const Color(0xFF10B981).withValues(alpha: 0.95)
                               : Colors.black.withValues(alpha: 0.75),
                           borderRadius: BorderRadius.circular(6),
                         ),
@@ -970,7 +980,7 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                             ),
                             const SizedBox(width: 3),
                             Text(
-                              isDownloaded ? 'OFFLINE' : 'ONLINE',
+                              isDownloaded ? 'DESCARGADO' : 'SOLO ONLINE',
                               style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,

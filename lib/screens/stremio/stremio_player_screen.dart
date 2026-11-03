@@ -286,11 +286,10 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       _tracksSubscription = player.stream.tracks.listen((tracks) {
         if (mounted) {
           // Filtrar las pistas de subtítulos para evitar duplicar pistas externas añadidas dinámicamente como "Incrustado MKV"
+          // En media_kit, s.uri es un bool que indica si la pista fue cargada dinámicamente desde un URI/archivo
           final nativeTracks = tracks.subtitle.where((s) {
-            final uri = s.uri;
-            if (uri == null || uri.isEmpty) return true;
-            final isExternal = _externalSubtitles.any((ext) => ext.url == uri || ext.url.contains(uri));
-            return !isExternal;
+            if (s.uri == true) return false;
+            return true;
           }).toList();
 
           setState(() {
