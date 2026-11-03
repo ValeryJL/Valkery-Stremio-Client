@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,26 @@ import '../../services/stremio/stremio_offline_download_manager.dart';
 import 'stremio_detail_screen.dart';
 import 'stremio_player_screen.dart';
 
+class _OfflineMediaSummary {
+  final String mediaId;
+  final String title;
+  final String type;
+  final String posterUrl;
+  final int totalBytes;
+  final int episodeCount;
+  final List<OfflineMediaEntry> entries;
+
+  _OfflineMediaSummary({
+    required this.mediaId,
+    required this.title,
+    required this.type,
+    required this.posterUrl,
+    required this.totalBytes,
+    required this.episodeCount,
+    required this.entries,
+  });
+}
+
 class StremioOfflineScreen extends ConsumerStatefulWidget {
   const StremioOfflineScreen({super.key});
 
@@ -23,6 +44,7 @@ class StremioOfflineScreen extends ConsumerStatefulWidget {
 
 class _StremioOfflineScreenState extends ConsumerState<StremioOfflineScreen> {
   bool _isSyncing = false;
+  String _selectedFilter = 'Todos';
 
   Future<void> _handleManualSync() async {
     if (_isSyncing) return;
@@ -445,11 +467,42 @@ class _StremioOfflineScreenState extends ConsumerState<StremioOfflineScreen> {
             d.type != 'series' && (d.season == null || d.episode == null))
         .toList();
 
-    // Group series by mediaId
-    final groupedSeries = <String, List<OfflineMediaEntry>>{};
-    for (final ep in seriesDownloads) {
-      groupedSeries.putIfAbsent(ep.mediaId, () => []).add(ep);
+    // Group completed downloads into unified media items
+    final Map<String, _OfflineMediaSummary> mediaSummaries = {};
+    for (final entry in completedDownloads) {
+      final isSeries = entry.type == 'series' || (entry.season != null && entry.episode != null);
+      final mediaId = entry.mediaId;
+      final existing = mediaSummaries[mediaId];
+      final bytes = entry.totalBytes > 0 ? entry.totalBytes : entry.downloadedBytes;
+      if (existing == null) {
+        mediaSummaries[mediaId] = _OfflineMediaSummary(
+          mediaId: mediaId,
+          title: isSeries ? entry.seriesTitle : entry.title,
+          type: isSeries ? 'series' : 'movie',
+          posterUrl: entry.posterUrl ?? '',
+          totalBytes: bytes,
+          episodeCount: 1,
+          entries: [entry],
+        );
+      } else {
+        mediaSummaries[mediaId] = _OfflineMediaSummary(
+          mediaId: mediaId,
+          title: existing.title,
+          type: existing.type,
+          posterUrl: existing.posterUrl.isNotEmpty ? existing.posterUrl : (entry.posterUrl ?? ''),
+          totalBytes: existing.totalBytes + bytes,
+          episodeCount: existing.episodeCount + 1,
+          entries: [...existing.entries, entry],
+        );
+      }
     }
+
+    final allSummaries = mediaSummaries.values.toList();
+    final filteredSummaries = allSummaries.where((s) {
+      if (_selectedFilter == 'Series') return s.type == 'series';
+      if (_selectedFilter == 'Películas') return s.type != 'series';
+      return true;
+    }).toList();
 
     final totalBytesUsed = downloads.fold<int>(
       0,
@@ -552,50 +605,84 @@ class _StremioOfflineScreenState extends ConsumerState<StremioOfflineScreen> {
             const SizedBox(height: 16),
           ],
 
-          // 4. Downloaded Series Section (Grouped by Series -> Seasons -> Episodes)
-          if (groupedSeries.isNotEmpty) ...[
+          // 4. Downloaded Library Grid
+          if (allSummaries.isNotEmpty) ...[
             _buildSectionHeader(
-              icon: IconsaxPlusBold.video_play,
-              title:
-                  'Series descargadas (${groupedSeries.length} series • ${seriesDownloads.length} episodios)',
+              icon: IconsaxPlusBold.folder_favorite,
+              title: 'Descargas en tu dispositivo (${allSummaries.length})',
               color: const Color(0xFF8B5CF6),
             ),
-            const SizedBox(height: 10),
-            ...groupedSeries.entries.map(
-              (entry) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _buildSeriesGroupCard(
-                  mediaId: entry.key,
-                  episodes: entry.value,
-                  watchState: storage.getWatchState(entry.key),
-                ),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final tab in ['Todos', 'Series', 'Películas']) ...[
+                    ChoiceChip(
+                      label: Text(
+                        tab == 'Todos'
+                            ? 'Todos (${allSummaries.length})'
+                            : (tab == 'Series'
+                                ? 'Series (${allSummaries.where((s) => s.type == "series").length})'
+                                : 'Películas (${allSummaries.where((s) => s.type != "series").length})'),
+                      ),
+                      selected: _selectedFilter == tab,
+                      onSelected: (selected) {
+                        if (selected) setState(() => _selectedFilter = tab);
+                      },
+                      selectedColor: const Color(0xFF8B5CF6),
+                      backgroundColor: Colors.white.withValues(alpha: 0.06),
+                      labelStyle: TextStyle(
+                        color: _selectedFilter == tab ? Colors.white : Colors.white70,
+                        fontSize: 12,
+                        fontWeight: _selectedFilter == tab ? FontWeight.bold : FontWeight.normal,
+                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      side: BorderSide.none,
+                      showCheckmark: false,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ],
               ),
             ),
             const SizedBox(height: 16),
-          ],
-
-          // 5. Downloaded Movies Section
-          if (movieDownloads.isNotEmpty) ...[
-            _buildSectionHeader(
-              icon: IconsaxPlusBold.video,
-              title: 'Películas descargadas (${movieDownloads.length})',
-              color: const Color(0xFF10B981),
-            ),
-            const SizedBox(height: 10),
-            ...movieDownloads.map(
-              (movie) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _buildMovieCard(
-                  movie,
-                  storage.getWatchState(movie.mediaId),
+            if (filteredSummaries.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    'No hay descargas para el filtro "$_selectedFilter"',
+                    style: const TextStyle(color: Colors.white54, fontSize: 13),
+                  ),
                 ),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 180,
+                  childAspectRatio: 0.58,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 16,
+                ),
+                itemCount: filteredSummaries.length,
+                itemBuilder: (context, index) {
+                  final item = filteredSummaries[index];
+                  final watchState = storage.getWatchState(item.mediaId);
+                  return _buildOfflineMediaCard(item, watchState);
+                },
               ),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
           ],
 
-          // 6. Empty Downloads State
+          // 5. Empty Downloads State
           if (downloads.isEmpty) _buildEmptyDownloadsCard(),
+        ],
+      ),
+    );
+  }
         ],
       ),
     );
@@ -1011,551 +1098,160 @@ class _StremioOfflineScreenState extends ConsumerState<StremioOfflineScreen> {
     );
   }
 
-  Widget _buildSeriesGroupCard({
-    required String mediaId,
-    required List<OfflineMediaEntry> episodes,
-    required LibraryWatchState? watchState,
-  }) {
-    final first = episodes.first;
-    final seriesTitle = first.seriesTitle;
-    final totalSeriesBytes = episodes.fold<int>(
-      0,
-      (sum, e) => sum + (e.totalBytes > 0 ? e.totalBytes : e.downloadedBytes),
-    );
-
-    // Group episodes by season
-    final bySeason = <int, List<OfflineMediaEntry>>{};
-    for (final ep in episodes) {
-      final s = ep.season ?? 1;
-      bySeason.putIfAbsent(s, () => []).add(ep);
-    }
-    final sortedSeasons = bySeason.keys.toList()..sort();
-    for (final s in sortedSeasons) {
-      bySeason[s]!.sort((a, b) => (a.episode ?? 0).compareTo(b.episode ?? 0));
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: true,
-          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-          leading: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => StremioDetailScreen(
-                    media: MediaItem(
-                      id: mediaId,
-                      type: 'series',
-                      name: seriesTitle,
-                      poster: first.posterUrl ?? '',
-                    ),
-                  ),
-                ),
-              );
-            },
-            child: _buildPosterThumb(first, width: 48, height: 70),
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => StremioDetailScreen(
-                          media: MediaItem(
-                            id: mediaId,
-                            type: 'series',
-                            name: seriesTitle,
-                            poster: first.posterUrl ?? '',
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                  child: Text(
-                    seriesTitle,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(IconsaxPlusLinear.arrow_right_3, size: 16, color: Colors.white70),
-                tooltip: 'Ver detalle de la serie',
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => StremioDetailScreen(
-                        media: MediaItem(
-                          id: mediaId,
-                          type: 'series',
-                          name: seriesTitle,
-                          poster: first.posterUrl ?? '',
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              if (watchState?.pendingOfflineSync == true)
-                _buildPendingSyncBadge(),
-            ],
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              '${episodes.length} ${episodes.length == 1 ? "episodio" : "episodios"} • ${sortedSeasons.length} ${sortedSeasons.length == 1 ? "temporada" : "temporadas"} • ${_formatBytes(totalSeriesBytes)}',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.white.withValues(alpha: 0.65),
-              ),
-            ),
-          ),
-          children: sortedSeasons.map((seasonNum) {
-            final seasonEps = bySeason[seasonNum]!;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    'Temporada $seasonNum (${seasonEps.length})',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFC4B5FD),
-                    ),
-                  ),
-                ),
-                ...seasonEps.map(
-                  (ep) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _buildEpisodeRow(ep, watchState),
-                  ),
-                ),
-              ],
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEpisodeRow(
-    OfflineMediaEntry ep,
-    LibraryWatchState? watchState,
-  ) {
-    final epNum = ep.episode ?? 1;
-    final seasonNum = ep.season ?? 1;
-    final videoId = '${ep.mediaId}:$seasonNum:$epNum';
-    final isWatched =
-        watchState != null && watchState.watchedEpisodes.contains(videoId);
-    final isCurrentVideo = watchState != null && watchState.videoId == videoId;
-    final progressRatio = isCurrentVideo
-        ? watchState.progressRatio
-        : (isWatched ? 1.0 : 0.0);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.25),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isWatched
-              ? const Color(0xFF10B981).withValues(alpha: 0.35)
-              : Colors.white.withValues(alpha: 0.08),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: isWatched
-                  ? const Color(0xFF10B981).withValues(alpha: 0.2)
-                  : const Color(0xFF8B5CF6).withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              'E${epNum.toString().padLeft(2, "0")}',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                color: isWatched
-                    ? const Color(0xFF10B981)
-                    : const Color(0xFFC4B5FD),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        ep.episodeTitle?.isNotEmpty == true
-                            ? 'Episodio $epNum — ${ep.episodeTitle}'
-                            : 'Temporada $seasonNum • Episodio $epNum',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13.5,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (isWatched)
-                      Container(
-                        margin: const EdgeInsets.only(left: 6),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'Visto',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF10B981),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 10,
-                  children: [
-                    Text(
-                      _formatBytes(
-                        ep.totalBytes > 0 ? ep.totalBytes : ep.downloadedBytes,
-                      ),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white.withValues(alpha: 0.6),
-                      ),
-                    ),
-                    if (ep.subtitles.isNotEmpty)
-                      Text(
-                        '${ep.subtitles.length} subtítulos offline',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFFC4B5FD),
-                        ),
-                      ),
-                  ],
-                ),
-                if (progressRatio > 0 && progressRatio < 1.0) ...[
-                  const SizedBox(height: 6),
-                  LinearProgressIndicator(
-                    value: progressRatio,
-                    backgroundColor: Colors.white10,
-                    color: const Color(0xFF8B5CF6),
-                    minHeight: 3,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          IconButton(
-            icon: Icon(
-              isWatched
-                  ? IconsaxPlusBold.tick_circle
-                  : IconsaxPlusLinear.tick_circle,
-              size: 20,
-              color: isWatched ? const Color(0xFF10B981) : Colors.white54,
-            ),
-            tooltip: isWatched ? 'Desmarcar visto' : 'Marcar como visto',
-            onPressed: () => _toggleOfflineWatchedState(
-              mediaId: ep.mediaId,
-              name: ep.seriesTitle,
-              type: 'series',
-              poster: ep.posterUrl ?? '',
-              season: seasonNum,
-              episode: epNum,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(
-              IconsaxPlusLinear.trash,
-              size: 18,
-              color: Colors.redAccent,
-            ),
-            tooltip: 'Eliminar episodio',
-            onPressed: () => _confirmSingleDelete(ep),
-          ),
-          IconButton(
-            icon: const Icon(
-              IconsaxPlusBold.play_circle,
-              size: 28,
-              color: Color(0xFF8B5CF6),
-            ),
-            tooltip: 'Reproducir sin conexión',
-            onPressed: () => _openOfflinePlayer(ep),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMovieCard(
-    OfflineMediaEntry item,
+  Widget _buildOfflineMediaCard(
+    _OfflineMediaSummary item,
     LibraryWatchState? watchState,
   ) {
     final isWatched = watchState != null &&
         (watchState.flaggedWatched > 0 ||
             watchState.timesWatched > 0 ||
             watchState.progressRatio >= 0.9);
-    final progressRatio = watchState?.progressRatio ?? 0.0;
+    final progress = watchState?.progressRatio ?? 0.0;
+    final isSeries = item.type == 'series';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.12),
-          width: 1,
-        ),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          _buildPosterThumb(item, width: 56, height: 82),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.seriesTitle,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (watchState?.pendingOfflineSync == true)
-                      _buildPendingSyncBadge(),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 10,
-                  children: [
-                    Text(
-                      'Descargado • ${_formatBytes(item.totalBytes > 0 ? item.totalBytes : item.downloadedBytes)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF10B981),
-                      ),
-                    ),
-                    if (item.subtitles.isNotEmpty)
-                      Text(
-                        '• ${item.subtitles.length} subs offline',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFFC4B5FD),
-                        ),
-                      ),
-                  ],
-                ),
-                if (progressRatio > 0) ...[
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: progressRatio,
-                    backgroundColor: Colors.white10,
-                    color: isWatched
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFF8B5CF6),
-                    minHeight: 4,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          IconButton(
-            icon: Icon(
-              isWatched
-                  ? IconsaxPlusBold.tick_circle
-                  : IconsaxPlusLinear.tick_circle,
-              size: 20,
-              color: isWatched ? const Color(0xFF10B981) : Colors.white54,
-            ),
-            tooltip: isWatched ? 'Desmarcar visto' : 'Marcar como visto',
-            onPressed: () => _toggleOfflineWatchedState(
-              mediaId: item.mediaId,
-              name: item.seriesTitle,
-              type: item.type,
-              poster: item.posterUrl ?? '',
-            ),
-          ),
-          IconButton(
-            icon: const Icon(
-              IconsaxPlusLinear.trash,
-              size: 20,
-              color: Colors.redAccent,
-            ),
-            tooltip: 'Eliminar descarga',
-            onPressed: () => _confirmSingleDelete(item),
-          ),
-          IconButton(
-            icon: const Icon(
-              IconsaxPlusBold.play_circle,
-              size: 32,
-              color: Color(0xFF8B5CF6),
-            ),
-            tooltip: 'Reproducir sin conexión',
-            onPressed: () => _openOfflinePlayer(item),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCachedHistoryTile(LibraryWatchState item) {
-    final epParts = item.videoId.split(':');
-    final isSeriesEp = epParts.length >= 3;
-    final seasonNum = isSeriesEp ? int.tryParse(epParts[1]) : null;
-    final epNum = isSeriesEp ? int.tryParse(epParts[2]) : null;
-    final isWatched = isSeriesEp
-        ? item.watchedEpisodes.contains(item.videoId)
-        : (item.flaggedWatched > 0 ||
-            item.timesWatched > 0 ||
-            item.progressRatio >= 0.9);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: item.pendingOfflineSync
-              ? Colors.amberAccent.withValues(alpha: 0.45)
-              : Colors.white.withValues(alpha: 0.08),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: item.poster.isNotEmpty
-                ? Image.network(
-                    item.poster,
-                    width: 40,
-                    height: 58,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 40,
-                      height: 58,
-                      color: Colors.white10,
-                      child: const Icon(IconsaxPlusLinear.video, size: 18),
-                    ),
-                  )
-                : Container(
-                    width: 40,
-                    height: 58,
-                    color: Colors.white10,
-                    child: const Icon(IconsaxPlusLinear.video, size: 18),
-                  ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => StremioDetailScreen(
-                      media: MediaItem(
-                        id: item.id,
-                        type: item.type,
-                        name: item.name,
-                        poster: item.poster,
-                      ),
-                    ),
-                  ),
-                );
-              },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13.5,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (item.pendingOfflineSync) _buildPendingSyncBadge(),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    isSeriesEp
-                        ? 'Último: Temporada $seasonNum • Episodio $epNum (${item.watchedEpisodes.length} vistos)'
-                        : (isWatched
-                            ? 'Completado'
-                            : 'Progreso: ${(item.progressRatio * 100).round()}%'),
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: Colors.white.withValues(alpha: 0.65),
-                    ),
-                  ),
-                ],
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => StremioDetailScreen(
+              media: MediaItem(
+                id: item.mediaId,
+                type: item.type,
+                name: item.title,
+                poster: item.posterUrl,
               ),
             ),
           ),
-          IconButton(
-            icon: Icon(
-              isWatched
-                  ? IconsaxPlusBold.tick_circle
-                  : IconsaxPlusLinear.tick_circle,
-              color: isWatched ? const Color(0xFF10B981) : Colors.white54,
-              size: 20,
+        );
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: item.posterUrl.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: item.posterUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => _posterFallback(180, 270),
+                          errorWidget: (_, __, ___) => _posterFallback(180, 270),
+                        )
+                      : _posterFallback(180, 270),
+                ),
+
+                // Top Left: DESCARGADO Pill
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          IconsaxPlusBold.document_download,
+                          size: 10,
+                          color: Colors.white,
+                        ),
+                        SizedBox(width: 3),
+                        Text(
+                          'DESCARGADO',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Top Right: Size / Episode Pill
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.75),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      isSeries
+                          ? '${item.episodeCount} ${item.episodeCount == 1 ? "ep." : "eps."}'
+                          : _formatBytes(item.totalBytes),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Bottom Progress Bar or Watched Badge
+                if (progress > 0 && progress < 0.95)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor: Colors.black45,
+                        color: const Color(0xFF8B5CF6),
+                        minHeight: 4,
+                      ),
+                    ),
+                  )
+                else if (isWatched)
+                  Positioned(
+                    bottom: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check, size: 10, color: Colors.white),
+                    ),
+                  ),
+              ],
             ),
-            tooltip: isWatched
-                ? 'Desmarcar visto (encola sync offline si estás desconectado)'
-                : 'Marcar visto (encola sync offline si estás desconectado)',
-            onPressed: () => _toggleOfflineWatchedState(
-              mediaId: item.id,
-              name: item.name,
-              type: item.type,
-              poster: item.poster,
-              season: seasonNum,
-              episode: epNum,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            isSeries
+                ? '${item.episodeCount} ${item.episodeCount == 1 ? "episodio" : "episodios"} • ${_formatBytes(item.totalBytes)}'
+                : 'Película • ${_formatBytes(item.totalBytes)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.white.withValues(alpha: 0.6),
             ),
           ),
         ],
