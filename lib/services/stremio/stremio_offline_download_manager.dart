@@ -475,7 +475,13 @@ class StremioOfflineDownloadManager {
         if (response.statusCode == 200) {
           final lang = sub.lang.isNotEmpty ? sub.lang : 'und';
           final subFile = File(p.join(targetFolder, 'sub_${i}_$lang.srt'));
-          await subFile.writeAsBytes(response.bodyBytes);
+          // Limpiar artefactos de traducción automática estilo [cite: 2]
+          final rawContent = utf8.decode(response.bodyBytes, allowMalformed: true);
+          final cleanContent = rawContent.replaceAll(
+            RegExp(r'\[cite(?:_start|_end|:\s*[^\]]*)?\]', caseSensitive: false),
+            '',
+          );
+          await subFile.writeAsString(cleanContent, encoding: utf8);
           list.add(OfflineSubtitleTrack(language: lang, localPath: subFile.path));
         }
       } catch (_) {}

@@ -596,31 +596,6 @@ class _StremioOfflineScreenState extends ConsumerState<StremioOfflineScreen> {
 
           // 6. Empty Downloads State
           if (downloads.isEmpty) _buildEmptyDownloadsCard(),
-
-          // 7. Cached Watch History for Offline Tracking
-          if (watchHistory.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            _buildSectionHeader(
-              icon: IconsaxPlusBold.clock,
-              title: 'Historial en caché local (${watchHistory.length})',
-              color: const Color(0xFFC4B5FD),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Podés marcar o desmarcar películas y capítulos como vistos aun estando sin internet; los cambios se encolan y se sincronizan automáticamente con Stremio Cloud al volver online.',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.white.withValues(alpha: 0.6),
-              ),
-            ),
-            const SizedBox(height: 10),
-            ...watchHistory.take(12).map(
-                  (item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _buildCachedHistoryTile(item),
-                  ),
-                ),
-          ],
         ],
       ),
     );
@@ -1071,17 +1046,68 @@ class _StremioOfflineScreenState extends ConsumerState<StremioOfflineScreen> {
           initiallyExpanded: true,
           tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-          leading: _buildPosterThumb(first, width: 48, height: 70),
+          leading: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StremioDetailScreen(
+                    media: MediaItem(
+                      id: mediaId,
+                      type: 'series',
+                      name: seriesTitle,
+                      poster: first.posterUrl ?? '',
+                    ),
+                  ),
+                ),
+              );
+            },
+            child: _buildPosterThumb(first, width: 48, height: 70),
+          ),
           title: Row(
             children: [
               Expanded(
-                child: Text(
-                  seriesTitle,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StremioDetailScreen(
+                          media: MediaItem(
+                            id: mediaId,
+                            type: 'series',
+                            name: seriesTitle,
+                            poster: first.posterUrl ?? '',
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  child: Text(
+                    seriesTitle,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
+              ),
+              IconButton(
+                icon: const Icon(IconsaxPlusLinear.arrow_right_3, size: 16, color: Colors.white70),
+                tooltip: 'Ver detalle de la serie',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => StremioDetailScreen(
+                        media: MediaItem(
+                          id: mediaId,
+                          type: 'series',
+                          name: seriesTitle,
+                          poster: first.posterUrl ?? '',
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
               if (watchState?.pendingOfflineSync == true)
                 _buildPendingSyncBadge(),

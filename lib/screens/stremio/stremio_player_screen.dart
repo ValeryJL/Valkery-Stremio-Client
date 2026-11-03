@@ -285,8 +285,16 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
       _tracksSubscription = player.stream.tracks.listen((tracks) {
         if (mounted) {
+          // Filtrar las pistas de subtítulos para evitar duplicar pistas externas añadidas dinámicamente como "Incrustado MKV"
+          final nativeTracks = tracks.subtitle.where((s) {
+            final uri = s.uri;
+            if (uri == null || uri.isEmpty) return true;
+            final isExternal = _externalSubtitles.any((ext) => ext.url == uri || ext.url.contains(uri));
+            return !isExternal;
+          }).toList();
+
           setState(() {
-            _embeddedSubtitles = tracks.subtitle;
+            _embeddedSubtitles = nativeTracks;
             _audioTracks = tracks.audio;
             _currentSubtitleTrack = player.state.track.subtitle;
             _currentAudioTrack = player.state.track.audio;
@@ -429,6 +437,15 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         await np.setProperty('network-timeout', '60');
         await np.setProperty('cache', 'yes');
         await np.setProperty('stream-lavf-o', 'reconnect_streamed=1,reconnect_delay_max=5');
+        // Estilo moderno de subtítulos (fondo translúcido redondeado y texto nítido)
+        await np.setProperty('sub-font', 'Rubik');
+        await np.setProperty('sub-font-size', '44');
+        await np.setProperty('sub-color', '#FFFFFFFF');
+        await np.setProperty('sub-border-size', '2.0');
+        await np.setProperty('sub-border-color', '#101010FF');
+        await np.setProperty('sub-back-color', '#80000000');
+        await np.setProperty('sub-shadow-offset', '0');
+        await np.setProperty('sub-margin-y', '36');
       }
     } catch (_) {}
 

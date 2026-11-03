@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iconsax_plus/iconsax_plus.dart';
@@ -211,7 +212,9 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
-                      children: LibraryFilter.values.map((filter) {
+                      children: LibraryFilter.values
+                          .where((f) => !kIsWeb || f != LibraryFilter.offline)
+                          .map((filter) {
                         final isSelected = _activeFilter == filter;
                         return Padding(
                           padding: const EdgeInsets.only(right: 8.0),
@@ -410,8 +413,8 @@ class _StremioLibraryScreenState extends ConsumerState<StremioLibraryScreen> {
                   }(),
                 ),
 
-                // Offline badge in offline mode
-                if (isOfflineMode)
+                // Offline badge in offline mode (native only)
+                if (!kIsWeb && isOfflineMode)
                   Positioned(
                     top: 6,
                     left: 6,

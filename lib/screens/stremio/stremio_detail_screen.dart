@@ -494,7 +494,19 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
         const SizedBox(height: 20),
 
         // Main Action Buttons Row (Reproducir, Fuentes, Favoritos, Visto)
-        Wrap(
+        final downloads = ref.watch(stremioOfflineDownloadManagerProvider).allDownloads;
+        final completedOfflineEntry = downloads.cast<OfflineMediaEntry?>().firstWhere(
+              (d) =>
+                  d != null &&
+                  d.status == OfflineItemStatus.completed &&
+                  (isSeries
+                      ? ((d.id == '${media.id}_S${_selectedSeason}E$_selectedEpisode') ||
+                         (d.id.startsWith(media.id) && d.season == _selectedSeason && d.episode == _selectedEpisode))
+                      : (d.id == media.id || d.id.startsWith(media.id))),
+              orElse: () => null,
+            );
+
+        return Wrap(
           spacing: 12,
           runSpacing: 10,
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -523,18 +535,7 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
               onPressed: () {
                 final isOffline = ref.read(stremioOfflineModeProvider);
                 if (isOffline) {
-                  final downloads = ref.read(stremioOfflineDownloadManagerProvider).allDownloads;
-                  final entry = downloads.cast<OfflineMediaEntry?>().firstWhere(
-                        (d) =>
-                            d != null &&
-                            d.status == OfflineItemStatus.completed &&
-                            (isSeries
-                                ? ((d.id == '${media.id}_S${_selectedSeason}E$_selectedEpisode') ||
-                                   (d.id.startsWith(media.id) && d.season == _selectedSeason && d.episode == _selectedEpisode))
-                                : (d.id == media.id || d.id.startsWith(media.id))),
-                        orElse: () => null,
-                      );
-                  if (entry != null && entry.localVideoPath.isNotEmpty) {
+                  if (completedOfflineEntry != null && completedOfflineEntry.localVideoPath.isNotEmpty) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => StremioPlayerScreen(
@@ -542,12 +543,12 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                           stream: StreamCandidate(
                             name: 'Offline Local',
                             title: 'Archivo descargado',
-                            url: entry.localVideoPath,
+                            url: completedOfflineEntry.localVideoPath,
                             quality: 'Local',
                             behaviorHints: const {'notWebReady': false},
                           ),
-                          localFilePath: entry.localVideoPath,
-                          localSubtitles: entry.subtitles,
+                          localFilePath: completedOfflineEntry.localVideoPath,
+                          localSubtitles: completedOfflineEntry.subtitles,
                           season: isSeries ? _selectedSeason : null,
                           episode: isSeries ? _selectedEpisode : null,
                         ),
@@ -576,6 +577,45 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                 }
               },
             ),
+
+            // Botón de reproducción offline directa si está descargado
+            if (completedOfflineEntry != null && completedOfflineEntry.localVideoPath.isNotEmpty)
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 4,
+                ),
+                icon: const Icon(IconsaxPlusBold.document_download, size: 18),
+                label: const Text(
+                  'Reproducir Offline',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => StremioPlayerScreen(
+                        media: media,
+                        stream: StreamCandidate(
+                          name: 'Offline Local',
+                          title: 'Archivo descargado',
+                          url: completedOfflineEntry.localVideoPath,
+                          quality: 'Local',
+                          behaviorHints: const {'notWebReady': false},
+                        ),
+                        localFilePath: completedOfflineEntry.localVideoPath,
+                        localSubtitles: completedOfflineEntry.subtitles,
+                        season: isSeries ? _selectedSeason : null,
+                        episode: isSeries ? _selectedEpisode : null,
+                      ),
+                    ),
+                  );
+                },
+              ),
 
             // Secondary "Ver Fuentes" button
             OutlinedButton.icon(
