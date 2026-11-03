@@ -137,7 +137,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
       _updateBuffer();
     }));
 
-    _domSubscriptions.add(_videoElement.onProgress.listen((_) {
+    _domSubscriptions.add(html.Element.progressEvent.forTarget(_videoElement).listen((_) {
       _updateBuffer();
     }));
 
@@ -782,3 +782,4 @@ class _RealWebHlsBridge implements WebHlsBridge {
   @override
   bool get isAutoMuted => _isAutoMuted;
 }
+
