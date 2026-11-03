@@ -65,6 +65,7 @@ class StremioApiService {
 
     // Automatically synchronize addons and watch history from user's account
     try {
+      await flushOfflineSyncQueue(user.authKey);
       await getAddonCollection(user.authKey);
       await fetchWatchHistory(user.authKey);
     } catch (_) {}
@@ -78,6 +79,7 @@ class StremioApiService {
     final key = _storage?.authKey;
     if (key != null && key.isNotEmpty) {
       try {
+        await flushOfflineSyncQueue(key);
         await getAddonCollection(key);
         await fetchWatchHistory(key);
       } catch (_) {}
@@ -309,6 +311,13 @@ class StremioApiService {
       return _storage?.watchHistory ?? const [];
     }
 
+    // Flush any pending offline watch states before pulling remote datastore
+    if (_storage?.offlineSyncQueue.isNotEmpty ?? false) {
+      try {
+        await flushOfflineSyncQueue(authKey);
+      } catch (_) {}
+    }
+
     final uri = Uri.parse('$baseUrl/datastoreGet');
     final response = await _httpClient
         .post(
@@ -349,7 +358,7 @@ class StremioApiService {
     String authKey,
     LibraryWatchState item,
   ) async {
-    if (authKey.trim().isEmpty) {
+    if (authKey.trim().isEmpty || (_storage?.isOfflineMode ?? false)) {
       await _storage?.enqueueOfflineWatchSync(item);
       return false;
     }
@@ -371,6 +380,9 @@ class StremioApiService {
       _decodeResponse(response);
       await _storage?.upsertWatchState(item, enqueueOfflineSync: false);
       await _storage?.markOfflineWatchSynced(item.id);
+      if (_storage?.offlineSyncQueue.isNotEmpty ?? false) {
+        await flushOfflineSyncQueue(authKey);
+      }
       return true;
     } catch (_) {
       await _storage?.enqueueOfflineWatchSync(item);

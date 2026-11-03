@@ -31,6 +31,7 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
     final theme = Theme.of(context);
     final coordinator = ref.watch(sourceCoordinatorProvider);
     final isOfflineMode = ref.watch(stremioOfflineModeProvider);
+    final pendingSyncCount = ref.watch(stremioPendingOfflineSyncProvider).length;
     final isDesktop = MediaQuery.of(context).size.width > 768;
     final isDesktopPlatform = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
@@ -75,12 +76,29 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
       StremioLibraryScreen(
         onExploreCatalog: isOfflineMode ? null : () => setState(() => _currentIndex = 0),
       ),
-      if (!kIsWeb)
-        const StremioOfflineScreen(),
+      const StremioOfflineScreen(),
       if (coordinator.isJellyfinActive)
         const ValkeryJellyfinView(),
       const ValkerySettingsScreen(),
     ];
+
+    final offlineIcon = pendingSyncCount > 0
+        ? Badge(
+            label: Text('$pendingSyncCount'),
+            backgroundColor: Colors.amber.shade700,
+            textColor: Colors.white,
+            child: const Icon(IconsaxPlusLinear.document_download),
+          )
+        : const Icon(IconsaxPlusLinear.document_download);
+
+    final offlineSelectedIcon = pendingSyncCount > 0
+        ? Badge(
+            label: Text('$pendingSyncCount'),
+            backgroundColor: Colors.amber.shade700,
+            textColor: Colors.white,
+            child: const Icon(IconsaxPlusBold.document_download, color: Color(0xFF8B5CF6)),
+          )
+        : const Icon(IconsaxPlusBold.document_download, color: Color(0xFF8B5CF6));
 
     final destinations = <NavigationDestination>[
       NavigationDestination(
@@ -99,12 +117,11 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
         selectedIcon: Icon(IconsaxPlusBold.folder_favorite, color: Color(0xFF8B5CF6)),
         label: 'Biblioteca',
       ),
-      if (!kIsWeb)
-        const NavigationDestination(
-          icon: Icon(IconsaxPlusLinear.document_download),
-          selectedIcon: Icon(IconsaxPlusBold.document_download, color: Color(0xFF8B5CF6)),
-          label: 'Offline',
-        ),
+      NavigationDestination(
+        icon: offlineIcon,
+        selectedIcon: offlineSelectedIcon,
+        label: 'Offline',
+      ),
       if (coordinator.isJellyfinActive)
         const NavigationDestination(
           icon: Icon(IconsaxPlusLinear.video_square),
@@ -163,13 +180,11 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
                     Icon(IconsaxPlusBold.folder_favorite, color: Color(0xFF8B5CF6)),
                 label: Text('Biblioteca'),
               ),
-              if (!kIsWeb)
-                const NavigationRailDestination(
-                  icon: Icon(IconsaxPlusLinear.document_download),
-                  selectedIcon:
-                      Icon(IconsaxPlusBold.document_download, color: Color(0xFF8B5CF6)),
-                  label: Text('Offline'),
-                ),
+              NavigationRailDestination(
+                icon: offlineIcon,
+                selectedIcon: offlineSelectedIcon,
+                label: const Text('Offline'),
+              ),
               if (coordinator.isJellyfinActive)
                 const NavigationRailDestination(
                   icon: Icon(IconsaxPlusLinear.video_square),

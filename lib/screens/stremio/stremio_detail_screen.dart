@@ -547,6 +547,7 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
                             behaviorHints: const {'notWebReady': false},
                           ),
                           localFilePath: entry.localVideoPath,
+                          localSubtitles: entry.subtitles,
                           season: isSeries ? _selectedSeason : null,
                           episode: isSeries ? _selectedEpisode : null,
                         ),

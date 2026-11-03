@@ -847,6 +847,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
     return line
         .replaceAll(RegExp(r'<[^>]*>'), '') // Strip <i>, <b>, <font>, <c.vtt>
         .replaceAll(RegExp(r'\{\\[^}]*\}'), '') // Strip ASS/SSA override tags {\an8}
+        .replaceAll(RegExp(r'\[cite(?:_start|_end|:\s*[^\]]*)?\]', caseSensitive: false), '') // Strip AI translation [cite: N] artifacts from OpenSubtitles
         .replaceAll('&nbsp;', ' ')
         .replaceAll('&amp;', '&')
         .replaceAll('&lt;', '<')

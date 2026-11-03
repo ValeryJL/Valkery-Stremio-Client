@@ -51,19 +51,44 @@ final stremioOfflineDownloadManagerProvider = Provider<StremioOfflineDownloadMan
   return manager;
 });
 
-/// Manual Forced Offline Mode Provider (Desktop & Mobile).
+/// Manual Forced Offline Mode Provider (Desktop & Mobile & Web).
 final stremioOfflineModeProvider = StateNotifierProvider<StremioOfflineModeNotifier, bool>((ref) {
   final storage = ref.watch(stremioStorageProvider);
   final processManager = ref.watch(stremioServerProcessManagerProvider);
-  return StremioOfflineModeNotifier(storage, processManager);
+  final api = ref.watch(stremioApiServiceProvider);
+  return StremioOfflineModeNotifier.withSync(
+    storage,
+    processManager,
+    api: api,
+    onOnlineResumed: () {
+      ref.invalidate(stremioWatchHistoryProvider);
+      ref.invalidate(stremioTopMoviesProvider);
+      ref.invalidate(stremioTopSeriesProvider);
+    },
+  );
 });
 
 class StremioOfflineModeNotifier extends StateNotifier<bool> {
   final StremioStorageService _storage;
   final StremioServerProcessManager? _processManager;
+  final StremioApiService? _api;
+  final void Function()? _onOnlineResumed;
 
-  StremioOfflineModeNotifier(this._storage, [this._processManager])
-      : super(_storage.preferences.forceOfflineMode);
+  StremioOfflineModeNotifier(
+    this._storage, [
+    this._processManager,
+  ])  : _api = null,
+        _onOnlineResumed = null,
+        super(_storage.preferences.forceOfflineMode);
+
+  StremioOfflineModeNotifier.withSync(
+    this._storage,
+    this._processManager, {
+    StremioApiService? api,
+    void Function()? onOnlineResumed,
+  })  : _api = api,
+        _onOnlineResumed = onOnlineResumed,
+        super(_storage.preferences.forceOfflineMode);
 
   Future<void> toggle() async {
     final next = !state;
@@ -77,6 +102,10 @@ class StremioOfflineModeNotifier extends StateNotifier<bool> {
       await _processManager?.stopLocalServer();
     } else {
       await _processManager?.initialize(autoStartLocalDaemon: true);
+      try {
+        await _api?.syncAccountData();
+      } catch (_) {}
+      _onOnlineResumed?.call();
     }
   }
 }
@@ -188,4 +217,18 @@ final stremioLibraryItemsProvider = Provider.autoDispose<AsyncValue<List<Library
 
   final items = historyAsync.value ?? storage.stremioLibraryItems;
   return AsyncData(items.where((item) => item.isLibraryItem).toList());
+});
+
+/// Pending offline watch states waiting to be synchronized with Stremio Cloud.
+final stremioPendingOfflineSyncProvider = Provider.autoDispose<List<LibraryWatchState>>((ref) {
+  final historyAsync = ref.watch(stremioWatchHistoryStreamProvider);
+  final storage = ref.watch(stremioStorageProvider);
+  final history = historyAsync.value ?? storage.watchHistory;
+  final pendingFromHistory = history.where((item) => item.pendingOfflineSync).toList();
+  final queue = storage.offlineSyncQueue;
+  final merged = <String, LibraryWatchState>{
+    for (final item in queue) item.id: item,
+    for (final item in pendingFromHistory) item.id: item,
+  };
+  return merged.values.toList();
 });

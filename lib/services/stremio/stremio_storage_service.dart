@@ -290,18 +290,21 @@ class StremioStorageService {
 
     if (decoded['watchHistory'] is List) {
       _watchHistory.clear();
+      _offlineSyncQueue.clear();
       for (final item in decoded['watchHistory'] as List<dynamic>) {
         if (item is Map<String, dynamic>) {
           final state = LibraryWatchState.fromJson(item);
           if (state.id.isNotEmpty) {
             _watchHistory[state.id] = state;
+            if (state.pendingOfflineSync) {
+              _offlineSyncQueue[state.id] = state;
+            }
           }
         }
       }
     }
 
     if (decoded['offlineSyncQueue'] is List) {
-      _offlineSyncQueue.clear();
       for (final item in decoded['offlineSyncQueue'] as List<dynamic>) {
         if (item is Map<String, dynamic>) {
           final state = LibraryWatchState.fromJson(
@@ -309,6 +312,7 @@ class StremioStorageService {
           ).copyWith(pendingOfflineSync: true);
           if (state.id.isNotEmpty) {
             _offlineSyncQueue[state.id] = state;
+            _watchHistory[state.id] = state;
           }
         }
       }
@@ -404,12 +408,16 @@ class StremioStorageService {
 
   Future<void> upsertWatchState(
     LibraryWatchState state, {
-    bool enqueueOfflineSync = false,
+    bool? enqueueOfflineSync,
   }) async {
-    final updated = state.copyWith(pendingOfflineSync: enqueueOfflineSync);
+    final shouldEnqueue =
+        enqueueOfflineSync ?? (isOfflineMode || state.pendingOfflineSync);
+    final updated = state.copyWith(pendingOfflineSync: shouldEnqueue);
     _watchHistory[updated.id] = updated;
-    if (enqueueOfflineSync) {
+    if (shouldEnqueue) {
       _offlineSyncQueue[updated.id] = updated;
+    } else {
+      _offlineSyncQueue.remove(updated.id);
     }
     await _persist();
     _notifyWatchHistory();

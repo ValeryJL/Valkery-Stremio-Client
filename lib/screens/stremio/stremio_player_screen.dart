@@ -18,6 +18,7 @@ import '../../models/stremio/media_item.dart' as stremio_model;
 import '../../models/stremio/stream_candidate.dart';
 import '../../models/stremio/watch_history_item.dart';
 import '../../providers/stremio_providers.dart';
+import '../../services/stremio/stremio_offline_download_manager.dart';
 import '../../util/external_player_launcher.dart';
 import 'valkery_desktop_title_bar.dart';
 import 'web_hls_bridge.dart';
@@ -29,6 +30,7 @@ class StremioPlayerScreen extends ConsumerStatefulWidget {
   final int? season;
   final int? episode;
   final String? localFilePath;
+  final List<OfflineSubtitleTrack>? localSubtitles;
 
   const StremioPlayerScreen({
     super.key,
@@ -37,6 +39,7 @@ class StremioPlayerScreen extends ConsumerStatefulWidget {
     this.season,
     this.episode,
     this.localFilePath,
+    this.localSubtitles,
   });
 
   @override
@@ -314,7 +317,18 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     // Auto-resume from saved playback progress
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final saved = ref.read(stremioStorageProvider).getWatchState(widget.media.id);
-      if (saved != null && saved.timeOffset > 10 && saved.duration > 0 && (saved.timeOffset < (saved.duration * 0.92))) {
+      final expectedVideoId = (widget.season != null && widget.episode != null)
+          ? '${widget.media.id}:${widget.season}:${widget.episode}'
+          : widget.media.id;
+      final matchesVideoId = saved != null &&
+          (saved.videoId.isEmpty ||
+              saved.videoId == expectedVideoId ||
+              widget.season == null);
+      if (saved != null &&
+          matchesVideoId &&
+          saved.timeOffset > 10 &&
+          saved.duration > 0 &&
+          (saved.timeOffset < (saved.duration * 0.92))) {
         Future.delayed(const Duration(milliseconds: 1600), () {
           if (mounted && _currentDuration.inSeconds > 0) {
             _seekUnified(Duration(seconds: saved.timeOffset));
@@ -615,14 +629,37 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
   Future<void> _loadExternalSubtitles() async {
     setState(() => _isLoadingExternalSubs = true);
+    final localTracks = <stremio_model.SubtitleTrack>[];
+    if (widget.localSubtitles != null && widget.localSubtitles!.isNotEmpty) {
+      for (var i = 0; i < widget.localSubtitles!.length; i++) {
+        final lt = widget.localSubtitles![i];
+        if (lt.localPath.isEmpty) continue;
+        localTracks.add(
+          stremio_model.SubtitleTrack(
+            id: 'offline_sub_$i',
+            lang: lt.language,
+            url: lt.localPath,
+            label: 'Offline #${i + 1}',
+            source: 'Local Offline',
+          ),
+        );
+      }
+    }
+
     try {
-      final catalogService = ref.read(catalogAndStreamServiceProvider);
-      final subs = await catalogService.fetchSubtitles(
-        widget.media.id,
-        widget.media.type,
-        season: widget.season,
-        episode: widget.episode,
-      );
+      final isOffline = ref.read(stremioOfflineModeProvider);
+      final remoteSubs = isOffline
+          ? const <stremio_model.SubtitleTrack>[]
+          : await ref.read(catalogAndStreamServiceProvider).fetchSubtitles(
+                widget.media.id,
+                widget.media.type,
+                season: widget.season,
+                episode: widget.episode,
+              );
+      final subs = <stremio_model.SubtitleTrack>[
+        ...localTracks,
+        ...remoteSubs,
+      ];
       if (mounted) {
         setState(() {
           _externalSubtitles = subs;
@@ -651,7 +688,14 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         }
       }
     } catch (_) {
-      if (mounted) setState(() => _isLoadingExternalSubs = false);
+      if (mounted) {
+        setState(() {
+          if (localTracks.isNotEmpty) {
+            _externalSubtitles = localTracks;
+          }
+          _isLoadingExternalSubs = false;
+        });
+      }
     }
   }
 
@@ -844,6 +888,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         if (completed) videoId,
       }.toList();
 
+      final isOffline = storage.isOfflineMode ||
+          ref.read(stremioOfflineModeProvider) ||
+          authKey == null ||
+          authKey.isEmpty;
+
       final watchState = LibraryWatchState(
         id: widget.media.id,
         name: widget.media.name,
@@ -858,14 +907,19 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         flaggedWatched: completed ? 1 : (existing?.flaggedWatched ?? 0),
         watchedEpisodes: watchedList,
         lastWatched: DateTime.now().toUtc(),
+        isLibraryItem: existing?.isLibraryItem ?? false,
+        pendingOfflineSync: isOffline,
       );
 
-      await storage.upsertWatchState(watchState);
-
-      if (authKey != null && authKey.isNotEmpty) {
+      if (isOffline) {
+        await storage.enqueueOfflineWatchSync(watchState);
+      } else {
+        await storage.upsertWatchState(watchState, enqueueOfflineSync: false);
         try {
           await api.syncWatchState(authKey, watchState);
-        } catch (_) {}
+        } catch (_) {
+          await storage.enqueueOfflineWatchSync(watchState);
+        }
       }
     }
   }
