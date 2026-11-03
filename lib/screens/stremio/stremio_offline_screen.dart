@@ -1467,9 +1467,7 @@ class _StremioOfflineScreenState extends ConsumerState<StremioOfflineScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => StremioDetailScreen(
-                      mediaId: item.id,
-                      type: item.type,
-                      initialData: MediaItem(
+                      media: MediaItem(
                         id: item.id,
                         type: item.type,
                         name: item.name,

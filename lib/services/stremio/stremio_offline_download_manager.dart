@@ -226,7 +226,7 @@ class StremioOfflineDownloadManager {
         : media.id;
 
     final epMeta = (season != null && episode != null)
-        ? media.videos
+        ? media.episodes
             .where((v) => v.season == season && v.episode == episode)
             .firstOrNull
         : null;
