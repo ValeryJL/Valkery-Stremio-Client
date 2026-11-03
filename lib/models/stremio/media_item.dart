@@ -361,7 +361,23 @@ class SubtitleTrack {
     final lang = (json['lang'] ?? 'und').toString();
     final id = (json['id'] ?? json['url'] ?? '').toString();
     final url = (json['url'] ?? '').toString();
-    final label = (json['label'] ?? _humanizeLanguage(lang)).toString();
+    final humanLang = _humanizeLanguage(lang);
+    final rawLabel = (json['label'] ?? '').toString().trim();
+    final releaseName = (json['movieReleaseName'] ?? json['subtitleFileName'] ?? '').toString().trim();
+    final releaseGroup = (json['releaseGroup'] ?? '').toString().trim();
+
+    String label;
+    if (rawLabel.isNotEmpty) {
+      label = rawLabel;
+    } else if (releaseName.isNotEmpty) {
+      final cleanRelease = releaseName.replaceAll(RegExp(r'\.(srt|vtt|ass|ssa|sub)$', caseSensitive: false), '');
+      label = '$humanLang • $cleanRelease';
+    } else if (releaseGroup.isNotEmpty) {
+      label = '$humanLang ($releaseGroup)';
+    } else {
+      label = humanLang;
+    }
+
     return SubtitleTrack(
       id: id,
       url: url,
@@ -372,25 +388,119 @@ class SubtitleTrack {
   }
 
   static String _humanizeLanguage(String code) {
-    final lower = code.toLowerCase();
-    if (lower == 'spa' || lower == 'es' || lower == 'es-es') {
-      return 'Español (SPA)';
+    final lower = code.trim().toLowerCase();
+    switch (lower) {
+      case 'spa':
+      case 'es':
+      case 'es-es':
+      case 'esp':
+        return 'Español';
+      case 'spl':
+      case 'lat':
+      case 'es-la':
+      case 'es-419':
+      case 'es-mx':
+        return 'Español Latino';
+      case 'eng':
+      case 'en':
+      case 'en-us':
+      case 'en-gb':
+        return 'Inglés';
+      case 'pob':
+      case 'pt-br':
+        return 'Portugués (Brasil)';
+      case 'por':
+      case 'pt':
+        return 'Portugués';
+      case 'fre':
+      case 'fra':
+      case 'fr':
+        return 'Francés';
+      case 'deu':
+      case 'ger':
+      case 'de':
+        return 'Alemán';
+      case 'ita':
+      case 'it':
+        return 'Italiano';
+      case 'jpn':
+      case 'ja':
+        return 'Japonés';
+      case 'kor':
+      case 'ko':
+        return 'Coreano';
+      case 'rus':
+      case 'ru':
+        return 'Ruso';
+      case 'ara':
+      case 'ar':
+        return 'Árabe';
+      case 'zho':
+      case 'chi':
+      case 'zh':
+        return 'Chino';
+      case 'nld':
+      case 'dut':
+      case 'nl':
+        return 'Neerlandés';
+      case 'pol':
+      case 'pl':
+        return 'Polaco';
+      case 'tur':
+      case 'tr':
+        return 'Turco';
+      case 'swe':
+      case 'sv':
+        return 'Sueco';
+      case 'dan':
+      case 'da':
+        return 'Danés';
+      case 'fin':
+      case 'fi':
+        return 'Finés';
+      case 'nor':
+      case 'nob':
+      case 'no':
+        return 'Noruego';
+      case 'heb':
+      case 'he':
+        return 'Hebreo';
+      case 'hun':
+      case 'hu':
+        return 'Húngaro';
+      case 'ces':
+      case 'cze':
+      case 'cs':
+        return 'Checo';
+      case 'ell':
+      case 'gre':
+      case 'el':
+        return 'Griego';
+      case 'ron':
+      case 'rum':
+      case 'ro':
+        return 'Rumano';
+      case 'ukr':
+      case 'uk':
+        return 'Ucraniano';
+      case 'ind':
+      case 'id':
+        return 'Indonesio';
+      case 'hin':
+      case 'hi':
+        return 'Hindi';
+      case 'cat':
+      case 'ca':
+        return 'Catalán';
+      case 'eus':
+      case 'baq':
+      case 'eu':
+        return 'Euskera';
+      case 'glg':
+      case 'gl':
+        return 'Gallego';
+      default:
+        return code.toUpperCase();
     }
-    if (lower == 'spl' || lower == 'es-la' || lower == 'es-mx') {
-      return 'Español Latino';
-    }
-    if (lower == 'eng' || lower == 'en') {
-      return 'English (ENG)';
-    }
-    if (lower == 'jpn' || lower == 'ja') {
-      return 'Japanese (JPN)';
-    }
-    if (lower == 'por' || lower == 'pt' || lower == 'pob') {
-      return 'Português (POR)';
-    }
-    if (lower == 'fre' || lower == 'fra' || lower == 'fr') {
-      return 'Français (FRE)';
-    }
-    return code.toUpperCase();
   }
 }

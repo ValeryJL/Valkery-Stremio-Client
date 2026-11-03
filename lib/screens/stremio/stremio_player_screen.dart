@@ -51,12 +51,14 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   StreamSubscription? _errorSubscription;
   StreamSubscription? _tracksSubscription;
   StreamSubscription? _webSubTracksSubscription;
+  StreamSubscription? _webSubtitleCueSubscription;
   StreamSubscription? _webAutoMutedSubscription;
   Timer? _progressSyncTimer;
   Timer? _hideControlsTimer;
 
   bool _isControlsVisible = true;
   bool _isWebAutoMuted = false;
+  String? _webSubtitleText;
   String? _playbackError;
   bool _isRetrying = false;
   bool _isInitialLoading = true;
@@ -190,6 +192,23 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           setState(() {
             _embeddedSubtitles = subs;
           });
+          // Auto-select embedded Spanish subtitle if no subtitle track is active yet
+          if (_currentSubtitleTrack.id == 'no') {
+            final spanishEmbedded = subs.where((s) {
+              final l = (s.language ?? '').toLowerCase();
+              final t = (s.title ?? '').toLowerCase();
+              return l.contains('spa') || l == 'es' || l.contains('lat') || t.contains('espa') || t.contains('spa');
+            }).firstOrNull;
+            if (spanishEmbedded != null) {
+              _applySubtitleTrack(spanishEmbedded);
+            }
+          }
+        }
+      });
+
+      _webSubtitleCueSubscription = bridge.subtitleCueTextStream.listen((cueText) {
+        if (mounted && _webSubtitleText != cueText) {
+          setState(() => _webSubtitleText = cueText);
         }
       });
 
@@ -314,6 +333,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _startProgressSyncTimer();
     _loadExternalSubtitles();
     _resetHideControlsTimer();
+    HardwareKeyboard.instance.addHandler(_handleGlobalHardwareKey);
   }
 
   void _handlePlayerError(String err) {
@@ -574,6 +594,25 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     return '${kb.toStringAsFixed(0)} KB/s';
   }
 
+  void _applySubtitleTrack(mpv.SubtitleTrack track, {String? indicatorLabel}) {
+    if (!mounted) return;
+    setState(() {
+      _currentSubtitleTrack = track;
+      if (track.id == 'no') {
+        _webSubtitleText = null;
+      }
+    });
+    if (kIsWeb) {
+      final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
+      _webBridge?.setSubtitleTrack(track, serverBaseUrl: serverUrl);
+    } else {
+      _player?.setSubtitleTrack(track);
+    }
+    if (indicatorLabel != null && indicatorLabel.isNotEmpty) {
+      _showIndicator('Subtítulo: $indicatorLabel', IconsaxPlusLinear.subtitle);
+    }
+  }
+
   Future<void> _loadExternalSubtitles() async {
     setState(() => _isLoadingExternalSubs = true);
     try {
@@ -589,6 +628,16 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           _externalSubtitles = subs;
           _isLoadingExternalSubs = false;
         });
+        // Auto-select first Spanish subtitle (or first available) if none active yet
+        if (_currentSubtitleTrack.id == 'no' && subs.isNotEmpty) {
+          final preferred = subs.where((s) => s.isSpanish).firstOrNull ?? subs.first;
+          final autoTrack = mpv.SubtitleTrack.uri(
+            preferred.url,
+            title: preferred.displayTitle,
+            language: preferred.lang,
+          );
+          _applySubtitleTrack(autoTrack);
+        }
       }
     } catch (_) {
       if (mounted) setState(() => _isLoadingExternalSubs = false);
@@ -716,32 +765,52 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _showControls();
   }
 
-  void _handleKeyEvent(KeyEvent event) {
-    if (event is! KeyDownEvent) return;
+  bool _handleGlobalHardwareKey(KeyEvent event) {
+    if (!mounted || event is! KeyDownEvent) return false;
+
+    // Do not intercept keys if a modal bottom sheet/dialog is open or a TextField is focused
+    final isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? true;
+    if (!isCurrentRoute) return false;
+
+    final primaryContext = FocusManager.instance.primaryFocus?.context;
+    if (primaryContext != null && primaryContext.widget is EditableText) {
+      return false;
+    }
 
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.keyK) {
       _playOrPauseUnified();
       _showControls();
-    } else if (key == LogicalKeyboardKey.arrowLeft) {
+      return true;
+    } else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyJ) {
       _seekRelative(-10);
-    } else if (key == LogicalKeyboardKey.arrowRight) {
+      return true;
+    } else if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.keyL) {
       _seekRelative(10);
+      return true;
     } else if (key == LogicalKeyboardKey.arrowUp) {
       _adjustVolume(5);
+      return true;
     } else if (key == LogicalKeyboardKey.arrowDown) {
       _adjustVolume(-5);
+      return true;
     } else if (key == LogicalKeyboardKey.keyM) {
       _toggleMute();
+      return true;
     } else if (key == LogicalKeyboardKey.keyA) {
       _showAudioTracksSelectionDialog();
+      return true;
     } else if (key == LogicalKeyboardKey.keyS || key == LogicalKeyboardKey.keyC) {
       _showSubtitlesSelectionDialog();
+      return true;
     } else if (key == LogicalKeyboardKey.keyF) {
       fullScreenHelper.toggleFullScreen(ref);
+      return true;
     } else if (key == LogicalKeyboardKey.escape) {
       Navigator.of(context).maybePop();
+      return true;
     }
+    return false;
   }
 
   Future<void> _savePlaybackProgress({bool isCompleted = false}) async {
@@ -798,6 +867,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalHardwareKey);
     _savePlaybackProgress();
     _hideControlsTimer?.cancel();
     _progressSyncTimer?.cancel();
@@ -809,6 +879,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _errorSubscription?.cancel();
     _tracksSubscription?.cancel();
     _webSubTracksSubscription?.cancel();
+    _webSubtitleCueSubscription?.cancel();
     _webAutoMutedSubscription?.cancel();
     _playingSubscription?.cancel();
     _completedSubscription?.cancel();
@@ -828,10 +899,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       onPopInvokedWithResult: (didPop, result) {
         _savePlaybackProgress();
       },
-      child: KeyboardListener(
+      child: Focus(
       focusNode: _focusNode,
       autofocus: true,
-      onKeyEvent: _handleKeyEvent,
       child: Scaffold(
         backgroundColor: Colors.black,
         body: MouseRegion(
@@ -841,6 +911,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
+              if (!_focusNode.hasFocus) {
+                _focusNode.requestFocus();
+              }
               if (kIsWeb && _isWebAutoMuted) {
                 _webBridge?.unmuteFromUserGesture(_volume);
                 _showIndicator('Sonido activado', IconsaxPlusLinear.volume_high);
@@ -871,6 +944,42 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                           fit: _videoFit,
                         ),
                 ),
+
+                // Web Subtitle Overlay (renders parsed VTT/SRT cues above CanvasKit video layer)
+                if (kIsWeb && _webSubtitleText != null && _webSubtitleText!.trim().isNotEmpty)
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    left: 24,
+                    right: 24,
+                    bottom: _isControlsVisible ? 114 : 36,
+                    child: IgnorePointer(
+                      child: Center(
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 960),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            _webSubtitleText!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 21,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                              shadows: [
+                                Shadow(color: Colors.black, blurRadius: 6, offset: Offset(0, 1)),
+                                Shadow(color: Colors.black, blurRadius: 3, offset: Offset(0, 1)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // Web Auto-Muted Unmute Banner (if browser blocked unmuted autoplay)
                 if (kIsWeb && _isWebAutoMuted && !_isInitialLoading)
@@ -1624,147 +1733,576 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
   // --- DIALOGS & OPTIONS SHEETS ---
 
+  String _normalizeSubtitleLanguage(String? rawLang, String? rawTitle) {
+    final l = (rawLang ?? '').trim().toLowerCase();
+    final t = (rawTitle ?? '').trim().toLowerCase();
+
+    if (l == 'spl' ||
+        l == 'es-419' ||
+        l == 'es-la' ||
+        l == 'lat' ||
+        l.contains('latino') ||
+        t.contains('latino') ||
+        t.contains('latam') ||
+        t.contains('(spl)')) {
+      return 'Español (Latino)';
+    }
+    if (l == 'spa' ||
+        l == 'es' ||
+        l == 'esp' ||
+        l == 'es-es' ||
+        l.startsWith('es-') ||
+        l.contains('spanish') ||
+        l.contains('español') ||
+        t.contains('español') ||
+        t.contains('spanish')) {
+      return 'Español';
+    }
+    if (l == 'eng' ||
+        l == 'en' ||
+        l.startsWith('en-') ||
+        l.contains('english') ||
+        t.contains('inglés') ||
+        t.contains('english')) {
+      return 'Inglés';
+    }
+    if (l == 'pob' || l == 'pt-br' || l == 'pb' || t.contains('brasil')) {
+      return 'Portugués (Brasil)';
+    }
+    if (l == 'por' || l == 'pt' || l.startsWith('pt-') || l.contains('portug')) {
+      return 'Portugués';
+    }
+    if (l == 'fre' || l == 'fra' || l == 'fr' || l.startsWith('fr-')) return 'Francés';
+    if (l == 'deu' || l == 'ger' || l == 'de' || l.startsWith('de-')) return 'Alemán';
+    if (l == 'ita' || l == 'it' || l.startsWith('it-')) return 'Italiano';
+    if (l == 'jpn' || l == 'ja') return 'Japonés';
+    if (l == 'kor' || l == 'ko') return 'Coreano';
+    if (l == 'rus' || l == 'ru') return 'Ruso';
+    if (l == 'ara' || l == 'ar') return 'Árabe';
+    if (l == 'zho' || l == 'chi' || l == 'zh' || l == 'zht' || l == 'zhs') return 'Chino';
+    if (l == 'nld' || l == 'dut' || l == 'nl') return 'Neerlandés';
+    if (l == 'pol' || l == 'pl') return 'Polaco';
+    if (l == 'tur' || l == 'tr') return 'Turco';
+    if (l == 'swe' || l == 'sv') return 'Sueco';
+    if (l == 'dan' || l == 'da') return 'Danés';
+    if (l == 'fin' || l == 'fi') return 'Finés';
+    if (l == 'nor' || l == 'no' || l == 'nob') return 'Noruego';
+    if (l == 'heb' || l == 'he') return 'Hebreo';
+    if (l == 'hun' || l == 'hu') return 'Húngaro';
+    if (l == 'ces' || l == 'cze' || l == 'cs') return 'Checo';
+    if (l == 'ell' || l == 'gre' || l == 'el') return 'Griego';
+    if (l == 'ron' || l == 'rum' || l == 'ro') return 'Rumano';
+    if (l == 'ukr' || l == 'uk') return 'Ucraniano';
+    if (l == 'ind' || l == 'id') return 'Indonesio';
+    if (l == 'hin' || l == 'hi') return 'Hindi';
+    if (l == 'cat' || l == 'ca') return 'Catalán';
+    if (l == 'eus' || l == 'baq' || l == 'eu') return 'Euskera';
+    if (l == 'glg' || l == 'gl') return 'Gallego';
+
+    if (l.isNotEmpty) {
+      return l.length <= 3 ? l.toUpperCase() : '${l[0].toUpperCase()}${l.substring(1)}';
+    }
+    return 'Otros idiomas';
+  }
+
+  int _languagePriorityRank(String langGroup) {
+    switch (langGroup) {
+      case 'Español (Latino)':
+        return 0;
+      case 'Español':
+        return 1;
+      case 'Inglés':
+        return 2;
+      case 'Portugués (Brasil)':
+        return 3;
+      case 'Portugués':
+        return 4;
+      case 'Otros idiomas':
+        return 999;
+      default:
+        return 10;
+    }
+  }
+
   void _showSubtitlesSelectionDialog() {
     _showControls();
+    String searchQuery = '';
+    String selectedLangFilter = 'Todos';
+
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF161426),
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            // Build unified list of subtitle options (Embedded + External)
+            final entries = <_SubtitleOptionItem>[];
+
+            // 1. Embedded tracks
+            int embIdx = 1;
+            for (final sub in _embeddedSubtitles) {
+              if (sub.id == 'no' || sub.id == 'auto') continue;
+              final group = _normalizeSubtitleLanguage(sub.language, sub.title);
+              final rawTitle = (sub.title ?? '').trim();
+              final display = rawTitle.isNotEmpty ? rawTitle : '$group (Pista #$embIdx)';
+              entries.add(
+                _SubtitleOptionItem(
+                  id: sub.id,
+                  languageGroup: group,
+                  title: display,
+                  subtitle: 'Pista integrada en el contenedor de video',
+                  badge: 'Incrustado MKV',
+                  isEmbedded: true,
+                  track: sub,
+                ),
+              );
+              embIdx++;
+            }
+
+            // 2. External addon tracks
+            final Map<String, int> langCounter = {};
+            for (final extSub in _externalSubtitles) {
+              final group = _normalizeSubtitleLanguage(extSub.lang, extSub.label);
+              final count = (langCounter[group] ?? 0) + 1;
+              langCounter[group] = count;
+
+              // Extract release/version suffix if present after '•'
+              String versionTitle = extSub.displayTitle;
+              if (versionTitle.contains('•')) {
+                final parts = versionTitle.split('•');
+                versionTitle = parts.sublist(1).join('•').trim();
+              } else {
+                // Distinguish multiple tracks of the same language by short URL/ID suffix or index
+                final uriPath = Uri.tryParse(extSub.url)?.pathSegments.lastOrNull ?? '';
+                final cleanFile = uriPath.replaceAll(RegExp(r'\.(srt|vtt)$', caseSensitive: false), '');
+                if (cleanFile.isNotEmpty && cleanFile.length > 3 && !RegExp(r'^\d+$').hasMatch(cleanFile)) {
+                  versionTitle = '$group #$count ($cleanFile)';
+                } else {
+                  versionTitle = '$group • Opción #$count';
+                }
+              }
+
+              final track = mpv.SubtitleTrack.uri(
+                extSub.url,
+                title: extSub.displayTitle,
+                language: extSub.lang,
+              );
+
+              entries.add(
+                _SubtitleOptionItem(
+                  id: extSub.url,
+                  languageGroup: group,
+                  title: versionTitle,
+                  subtitle: extSub.addonName,
+                  badge: extSub.addonName,
+                  isEmbedded: false,
+                  track: track,
+                ),
+              );
+            }
+
+            // Group counts across all entries (before search/chip filter)
+            final Map<String, int> groupCounts = {};
+            for (final e in entries) {
+              groupCounts[e.languageGroup] = (groupCounts[e.languageGroup] ?? 0) + 1;
+            }
+
+            final sortedLanguages = groupCounts.keys.toList()
+              ..sort((a, b) {
+                final rA = _languagePriorityRank(a);
+                final rB = _languagePriorityRank(b);
+                if (rA != rB) return rA.compareTo(rB);
+                return a.compareTo(b);
+              });
+
+            // Apply language chip & text search filter
+            final q = searchQuery.trim().toLowerCase();
+            final filteredEntries = entries.where((e) {
+              if (selectedLangFilter != 'Todos' && e.languageGroup != selectedLangFilter) {
+                return false;
+              }
+              if (q.isEmpty) return true;
+              return e.languageGroup.toLowerCase().contains(q) ||
+                  e.title.toLowerCase().contains(q) ||
+                  e.subtitle.toLowerCase().contains(q) ||
+                  e.badge.toLowerCase().contains(q);
+            }).toList();
+
+            // Group filtered entries by languageGroup
+            final Map<String, List<_SubtitleOptionItem>> groupedFiltered = {};
+            for (final lang in sortedLanguages) {
+              final matching = filteredEntries.where((e) => e.languageGroup == lang).toList();
+              if (matching.isNotEmpty) {
+                groupedFiltered[lang] = matching;
+              }
+            }
+
+            final isSubOff = _currentSubtitleTrack.id == 'no';
+
             return SafeArea(
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.78,
+                ),
+                padding: EdgeInsets.only(
+                  top: 18,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 12,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Header
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
                         children: [
-                          const Icon(IconsaxPlusLinear.subtitle, color: Color(0xFF8B5CF6)),
-                          const SizedBox(width: 10),
-                          const Text(
-                            'Subtítulos',
-                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          const Spacer(),
-                          if (_isLoadingExternalSubs)
-                            const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B5CF6)),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(10),
                             ),
+                            child: const Icon(IconsaxPlusLinear.subtitle, color: Color(0xFF8B5CF6), size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Subtítulos',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white10,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '${entries.length} disponibles',
+                                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  isSubOff
+                                      ? 'Desactivados actualmente'
+                                      : 'Activo: ${_currentSubtitleTrack.title ?? _currentSubtitleTrack.language ?? "Subtítulo seleccionado"}',
+                                  style: const TextStyle(color: Color(0xFFC4B5FD), fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (_isLoadingExternalSubs)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 8),
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B5CF6)),
+                              ),
+                            ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                            onPressed: () => Navigator.pop(context),
+                          ),
                         ],
                       ),
                     ),
+
                     const SizedBox(height: 12),
+
+                    // Search Bar
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: TextField(
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: 'Filtrar por idioma, versión o fuente (ej. Español, Latino, MKV)...',
+                          hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                          prefixIcon: const Icon(IconsaxPlusLinear.search_normal_1, color: Colors.white54, size: 18),
+                          suffixIcon: searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, color: Colors.white54, size: 18),
+                                  onPressed: () => setModalState(() => searchQuery = ''),
+                                )
+                              : null,
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: 0.06),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.5),
+                          ),
+                        ),
+                        onChanged: (val) => setModalState(() => searchQuery = val),
+                      ),
+                    ),
+
+                    // Language Quick-Filter Chips
+                    if (sortedLanguages.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 36,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text('Todos (${entries.length})'),
+                                selected: selectedLangFilter == 'Todos',
+                                onSelected: (_) => setModalState(() => selectedLangFilter = 'Todos'),
+                                selectedColor: const Color(0xFF8B5CF6),
+                                backgroundColor: Colors.white.withValues(alpha: 0.07),
+                                labelStyle: TextStyle(
+                                  color: selectedLangFilter == 'Todos' ? Colors.white : Colors.white70,
+                                  fontSize: 12,
+                                  fontWeight: selectedLangFilter == 'Todos' ? FontWeight.bold : FontWeight.normal,
+                                ),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                side: BorderSide.none,
+                                showCheckmark: false,
+                              ),
+                            ),
+                            for (final lang in sortedLanguages)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ChoiceChip(
+                                  label: Text('$lang (${groupCounts[lang]})'),
+                                  selected: selectedLangFilter == lang,
+                                  onSelected: (_) => setModalState(() {
+                                    selectedLangFilter = selectedLangFilter == lang ? 'Todos' : lang;
+                                  }),
+                                  selectedColor: const Color(0xFF8B5CF6),
+                                  backgroundColor: Colors.white.withValues(alpha: 0.07),
+                                  labelStyle: TextStyle(
+                                    color: selectedLangFilter == lang ? Colors.white : Colors.white70,
+                                    fontSize: 12,
+                                    fontWeight: selectedLangFilter == lang ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  side: BorderSide.none,
+                                  showCheckmark: false,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 10),
                     const Divider(color: Colors.white12, height: 1),
+
+                    // Grouped Subtitle Tracks List
                     Flexible(
                       child: ListView(
                         shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         children: [
                           // Disable subtitles option
-                          ListTile(
-                            leading: Icon(
-                              Icons.close,
-                              color: _currentSubtitleTrack.id == 'no' ? const Color(0xFF8B5CF6) : Colors.white70,
-                            ),
-                            title: const Text('Desactivados', style: TextStyle(color: Colors.white)),
-                            trailing: _currentSubtitleTrack.id == 'no'
-                                ? const Icon(Icons.check, color: Color(0xFF8B5CF6))
-                                : null,
-                            onTap: () {
-                              final noSub = mpv.SubtitleTrack.no();
-                              if (kIsWeb) {
-                                final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
-                                _webBridge?.setSubtitleTrack(noSub, serverBaseUrl: serverUrl);
-                              } else {
-                                _player?.setSubtitleTrack(noSub);
-                              }
-                              setState(() => _currentSubtitleTrack = noSub);
-                              Navigator.pop(context);
-                            },
-                          ),
-
-                          // Embedded Subtitles Section
-                          if (_embeddedSubtitles.isNotEmpty) ...[
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                              child: Text(
-                                'Subtítulos del video (Incrustados)',
-                                style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            for (final sub in _embeddedSubtitles)
-                              if (sub.id != 'no' && sub.id != 'auto')
-                                ListTile(
+                          if (searchQuery.isEmpty && selectedLangFilter == 'Todos')
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Material(
+                                color: isSubOff
+                                    ? const Color(0xFF8B5CF6).withValues(alpha: 0.2)
+                                    : Colors.white.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(12),
+                                child: ListTile(
                                   dense: true,
-                                  title: Text(
-                                    sub.title?.isNotEmpty == true ? sub.title! : (sub.language ?? 'Pista ${sub.id}'),
-                                    style: const TextStyle(color: Colors.white),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  leading: Icon(
+                                    Icons.subtitles_off_outlined,
+                                    color: isSubOff ? const Color(0xFFC4B5FD) : Colors.white60,
+                                    size: 20,
                                   ),
-                                  subtitle: sub.language != null
-                                      ? Text(sub.language!, style: const TextStyle(color: Colors.white54, fontSize: 11))
-                                      : null,
-                                  trailing: _currentSubtitleTrack.id == sub.id
-                                      ? const Icon(Icons.check, color: Color(0xFF8B5CF6))
+                                  title: Text(
+                                    'Desactivar subtítulos',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: isSubOff ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                  ),
+                                  trailing: isSubOff
+                                      ? const Icon(IconsaxPlusBold.tick_circle, color: Color(0xFF8B5CF6), size: 20)
                                       : null,
                                   onTap: () {
-                                    if (kIsWeb) {
-                                      final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
-                                      _webBridge?.setSubtitleTrack(sub, serverBaseUrl: serverUrl);
-                                    } else {
-                                      _player?.setSubtitleTrack(sub);
-                                    }
-                                    setState(() => _currentSubtitleTrack = sub);
+                                    _applySubtitleTrack(mpv.SubtitleTrack.no(), indicatorLabel: 'Desactivados');
                                     Navigator.pop(context);
                                   },
                                 ),
-                          ],
-
-                          // External Subtitles Section (OpenSubtitles / Addons)
-                          if (_externalSubtitles.isNotEmpty) ...[
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                              child: Text(
-                                'Subtítulos online (OpenSubtitles / Addons)',
-                                style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                             ),
-                            for (final extSub in _externalSubtitles)
-                              ListTile(
-                                dense: true,
-                                title: Text(
-                                  extSub.displayTitle,
-                                  style: const TextStyle(color: Colors.white),
+
+                          if (groupedFiltered.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 32),
+                              child: Center(
+                                child: Text(
+                                  _isLoadingExternalSubs
+                                      ? 'Buscando subtítulos en addons...'
+                                      : 'No se encontraron subtítulos para este filtro.',
+                                  style: const TextStyle(color: Colors.white54, fontSize: 13),
                                 ),
-                                subtitle: Text(
-                                  extSub.addonName,
-                                  style: const TextStyle(color: Colors.white54, fontSize: 11),
-                                ),
-                                trailing: _currentSubtitleTrack.title == extSub.displayTitle
-                                    ? const Icon(Icons.check, color: Color(0xFF8B5CF6))
-                                    : null,
-                                onTap: () {
-                                  final track = mpv.SubtitleTrack.uri(
-                                    extSub.url,
-                                    title: extSub.displayTitle,
-                                    language: extSub.lang,
+                              ),
+                            ),
+
+                          for (final entry in groupedFiltered.entries) ...[
+                            // Language Group Header
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10, bottom: 6, left: 4, right: 4),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.language, size: 15, color: Color(0xFFC4B5FD)),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    entry.key,
+                                    style: const TextStyle(
+                                      color: Color(0xFFC4B5FD),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '${entry.value.length}',
+                                      style: const TextStyle(
+                                        color: Color(0xFFC4B5FD),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Tracks inside this language group
+                            for (final item in entry.value)
+                              Builder(
+                                builder: (context) {
+                                  final isSelected = _currentSubtitleTrack.id == item.id;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Material(
+                                      color: isSelected
+                                          ? const Color(0xFF8B5CF6).withValues(alpha: 0.22)
+                                          : Colors.white.withValues(alpha: 0.04),
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(12),
+                                        onTap: () {
+                                          _applySubtitleTrack(
+                                            item.track,
+                                            indicatorLabel: '${item.languageGroup} • ${item.title}',
+                                          );
+                                          Navigator.pop(context);
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(
+                                              color: isSelected ? const Color(0xFF8B5CF6) : Colors.transparent,
+                                              width: 1.2,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                item.isEmbedded
+                                                    ? IconsaxPlusLinear.video_square
+                                                    : IconsaxPlusLinear.subtitle,
+                                                size: 18,
+                                                color: isSelected ? const Color(0xFFC4B5FD) : Colors.white60,
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      item.title,
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 13.5,
+                                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Row(
+                                                      children: [
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(
+                                                            horizontal: 6,
+                                                            vertical: 1,
+                                                          ),
+                                                          decoration: BoxDecoration(
+                                                            color: item.isEmbedded
+                                                                ? const Color(0xFF10B981).withValues(alpha: 0.2)
+                                                                : Colors.white10,
+                                                            borderRadius: BorderRadius.circular(6),
+                                                          ),
+                                                          child: Text(
+                                                            item.badge,
+                                                            style: TextStyle(
+                                                              color: item.isEmbedded
+                                                                  ? const Color(0xFF34D399)
+                                                                  : Colors.white60,
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.w600,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              if (isSelected)
+                                                const Icon(
+                                                  IconsaxPlusBold.tick_circle,
+                                                  color: Color(0xFF8B5CF6),
+                                                  size: 20,
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   );
-                                  if (kIsWeb) {
-                                    final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
-                                    _webBridge?.setSubtitleTrack(track, serverBaseUrl: serverUrl);
-                                  } else {
-                                    _player?.setSubtitleTrack(track);
-                                  }
-                                  setState(() => _currentSubtitleTrack = track);
-                                  _showIndicator('Subtítulo: ${extSub.displayTitle}', IconsaxPlusLinear.subtitle);
-                                  Navigator.pop(context);
                                 },
                               ),
                           ],
@@ -1778,7 +2316,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           },
         );
       },
-    );
+    ).whenComplete(() {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
+    });
   }
 
   String _formatAudioLanguage(String? lang) {
@@ -2170,4 +2712,24 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return h > 0 ? '$h:$m:$s' : '$m:$s';
   }
+}
+
+class _SubtitleOptionItem {
+  final String id;
+  final String languageGroup;
+  final String title;
+  final String subtitle;
+  final String badge;
+  final bool isEmbedded;
+  final mpv.SubtitleTrack track;
+
+  const _SubtitleOptionItem({
+    required this.id,
+    required this.languageGroup,
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.isEmbedded,
+    required this.track,
+  });
 }

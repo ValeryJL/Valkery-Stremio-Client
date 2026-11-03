@@ -14,6 +14,18 @@ import 'web_hls_bridge.dart';
 
 WebHlsBridge createWebHlsBridge() => _RealWebHlsBridge();
 
+class _SubtitleCue {
+  final double startSeconds;
+  final double endSeconds;
+  final String text;
+
+  const _SubtitleCue({
+    required this.startSeconds,
+    required this.endSeconds,
+    required this.text,
+  });
+}
+
 class _RealWebHlsBridge implements WebHlsBridge {
   static int _nextViewId = 1;
 
@@ -39,6 +51,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
   final _audioTracksController = StreamController<List<mpv.AudioTrack>>.broadcast();
   final _subtitleTracksController = StreamController<List<mpv.SubtitleTrack>>.broadcast();
   final _autoMutedController = StreamController<bool>.broadcast();
+  final _subtitleCueTextController = StreamController<String?>.broadcast();
 
   final List<StreamSubscription> _domSubscriptions = [];
 
@@ -48,7 +61,10 @@ class _RealWebHlsBridge implements WebHlsBridge {
   Duration _buffer = Duration.zero;
   bool _isAutoMuted = false;
   double _targetVolume = 1.0;
-  String? _activeSubtitleBlobUrl;
+
+  List<_SubtitleCue> _parsedCues = [];
+  String? _currentSubtitleCueText;
+  int _subtitleLoadGeneration = 0;
 
   _RealWebHlsBridge() {
     _viewId = _nextViewId++;
@@ -59,6 +75,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
       ..controls = false
       ..muted = false
       ..crossOrigin = 'anonymous'
+      ..tabIndex = -1
       ..setAttribute('playsinline', 'true')
       ..setAttribute('webkit-playsinline', 'true')
       ..setAttribute('preload', 'auto')
@@ -68,14 +85,17 @@ class _RealWebHlsBridge implements WebHlsBridge {
       ..style.backgroundColor = '#000000'
       ..style.border = 'none'
       ..style.outline = 'none'
-      ..style.display = 'block';
+      ..style.display = 'block'
+      ..style.pointerEvents = 'none';
 
     _containerElement = html.DivElement()
+      ..tabIndex = -1
       ..style.width = '100%'
       ..style.height = '100%'
       ..style.backgroundColor = '#000000'
       ..style.position = 'relative'
       ..style.overflow = 'hidden'
+      ..style.pointerEvents = 'none'
       ..append(_videoElement);
 
     ui_web.platformViewRegistry.registerViewFactory(
@@ -133,6 +153,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
       if (!sec.isNaN && !sec.isInfinite && sec >= 0) {
         _position = Duration(milliseconds: (sec * 1000).round());
         if (!_disposed) _positionController.add(_position);
+        _updateActiveSubtitleCue(sec);
       }
       _updateBuffer();
     }));
@@ -157,6 +178,29 @@ class _RealWebHlsBridge implements WebHlsBridge {
         _errorController.add(msg);
       }
     }));
+  }
+
+  void _updateActiveSubtitleCue(double currentTimeSec) {
+    if (_parsedCues.isEmpty) {
+      if (_currentSubtitleCueText != null) {
+        _currentSubtitleCueText = null;
+        if (!_disposed) _subtitleCueTextController.add(null);
+      }
+      return;
+    }
+
+    final matchingTexts = <String>[];
+    for (final cue in _parsedCues) {
+      if (currentTimeSec >= cue.startSeconds && currentTimeSec <= cue.endSeconds) {
+        matchingTexts.add(cue.text);
+      }
+    }
+
+    final combined = matchingTexts.isEmpty ? null : matchingTexts.join('\n');
+    if (combined != _currentSubtitleCueText) {
+      _currentSubtitleCueText = combined;
+      if (!_disposed) _subtitleCueTextController.add(combined);
+    }
   }
 
   void _updateDuration() {
@@ -214,8 +258,6 @@ class _RealWebHlsBridge implements WebHlsBridge {
             errStr.contains('interact') ||
             errStr.contains('gesture') ||
             !_isPlaying) {
-          // Browser blocked unmuted autoplay because async torrent preparation exceeded transient activation.
-          // Start playing muted immediately so video frames render, and show unmute indicator!
           _videoElement.muted = true;
           _isAutoMuted = true;
           if (!_disposed) _autoMutedController.add(true);
@@ -256,9 +298,17 @@ class _RealWebHlsBridge implements WebHlsBridge {
   }
 
   void _openWithHlsJs(Object hlsCtor, String url) {
+    // CRITICAL: renderTextTracksNatively: false + subtitleTrackController disabled on load
+    // prevents hls.js from automatically requesting `sub0.vtt` on `DEFAULT=YES,AUTOSELECT=YES`
+    // in master.m3u8, which otherwise causes rivulet-engine to launch a full-file ffmpeg
+    // subtitle demux that stalls seg0.ts/seg1.ts!
     final config = js_util.jsify({
       'enableWorker': true,
       'lowLatencyMode': false,
+      'renderTextTracksNatively': false,
+      'enableWebVTT': false,
+      'enableIMSC1': false,
+      'enableCEA708Captions': false,
       'backBufferLength': 60,
       'maxBufferLength': 60,
       'maxMaxBufferLength': 120,
@@ -284,8 +334,6 @@ class _RealWebHlsBridge implements WebHlsBridge {
     final hls = js_util.callConstructor<Object>(hlsCtor, [config]);
     _hlsInstance = hls;
 
-    // Immediately disable automatic subtitle track extraction on initial load so rivulet-engine
-    // doesn't spawn an expensive full-file subtitle demux while seg0.ts is transcoding.
     try {
       js_util.setProperty(hls, 'subtitleTrack', -1);
       js_util.setProperty(hls, 'subtitleDisplay', false);
@@ -298,6 +346,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
         if (_disposed) return;
         try {
           js_util.setProperty(hls, 'subtitleTrack', -1);
+          js_util.setProperty(hls, 'subtitleDisplay', false);
         } catch (_) {}
         _extractHlsAudioTracks(hls, data);
         _extractHlsSubtitleTracks(hls, data);
@@ -319,6 +368,10 @@ class _RealWebHlsBridge implements WebHlsBridge {
       'hlsSubtitleTracksUpdated',
       js_util.allowInterop((Object? event, Object? data) {
         if (_disposed) return;
+        try {
+          js_util.setProperty(hls, 'subtitleTrack', -1);
+          js_util.setProperty(hls, 'subtitleDisplay', false);
+        } catch (_) {}
         _extractHlsSubtitleTracks(hls, data);
       }),
     ]);
@@ -350,7 +403,6 @@ class _RealWebHlsBridge implements WebHlsBridge {
           debugPrint('[ValkeryWebHls] HLS event error: fatal=$isFatal type=$type details=$details');
         }
 
-        // If bufferStalledError or bufferSeekOverHole, jump the PTS hole
         if (details == 'bufferStalledError' || details == 'bufferSeekOverHole' || details == 'bufferNudgeOnStall') {
           _jumpInitialPtsGapIfNeeded();
         }
@@ -360,13 +412,9 @@ class _RealWebHlsBridge implements WebHlsBridge {
         if (type == 'networkError') {
           if (_networkErrorRetries < 6) {
             _networkErrorRetries++;
-            if (kDebugMode) {
-              debugPrint('[ValkeryWebHls] Recovering fatal networkError (attempt $_networkErrorRetries)...');
-            }
             Future.delayed(const Duration(milliseconds: 1200), () {
               if (_disposed || _hlsInstance == null) return;
               try {
-                // If manifest failed or session expired, reload source
                 if (details.contains('manifest') || details.contains('level')) {
                   js_util.callMethod(_hlsInstance!, 'loadSource', [url]);
                 }
@@ -378,9 +426,6 @@ class _RealWebHlsBridge implements WebHlsBridge {
         } else if (type == 'mediaError') {
           if (_mediaErrorRetries < 4) {
             _mediaErrorRetries++;
-            if (kDebugMode) {
-              debugPrint('[ValkeryWebHls] Recovering fatal mediaError (attempt $_mediaErrorRetries)...');
-            }
             try {
               if (_mediaErrorRetries == 2) {
                 js_util.callMethod(hls, 'swapAudioCodec', const []);
@@ -391,12 +436,8 @@ class _RealWebHlsBridge implements WebHlsBridge {
           }
         }
 
-        // If HLS completely failed and we have a direct URL fallback, try direct HTML5 playback
         if (!_triedDirectFallback && _fallbackDirectUrl != null && _fallbackDirectUrl != url) {
           _triedDirectFallback = true;
-          if (kDebugMode) {
-            debugPrint('[ValkeryWebHls] HLS exhausted retries; trying direct fallback: $_fallbackDirectUrl');
-          }
           _destroyHls();
           _openDirectHtml5(_fallbackDirectUrl!);
           return;
@@ -450,7 +491,10 @@ class _RealWebHlsBridge implements WebHlsBridge {
 
   void _extractHlsSubtitleTracks(Object hls, Object? data) {
     try {
-      final rawList = js_util.getProperty<List<dynamic>?>(hls, 'subtitleTracks');
+      List<dynamic>? rawList = js_util.getProperty<List<dynamic>?>(hls, 'subtitleTracks');
+      if ((rawList == null || rawList.isEmpty) && data != null) {
+        rawList = js_util.getProperty<List<dynamic>?>(data, 'subtitleTracks');
+      }
       if (rawList == null || rawList.isEmpty) return;
 
       final tracks = <mpv.SubtitleTrack>[];
@@ -482,7 +526,6 @@ class _RealWebHlsBridge implements WebHlsBridge {
       _isPlaying = true;
       if (!_disposed) _playingController.add(true);
     }).catchError((_) {
-      // Fallback if still restricted
       _videoElement.muted = true;
       _isAutoMuted = true;
       if (!_disposed) _autoMutedController.add(true);
@@ -527,9 +570,11 @@ class _RealWebHlsBridge implements WebHlsBridge {
   void seek(Duration target) {
     if (_disposed) return;
     final sec = target.inMilliseconds / 1000.0;
-    _videoElement.currentTime = sec < 0 ? 0 : sec;
+    final clampedSec = sec < 0 ? 0.0 : sec;
+    _videoElement.currentTime = clampedSec;
     _position = target;
     _positionController.add(target);
+    _updateActiveSubtitleCue(clampedSec);
   }
 
   @override
@@ -589,132 +634,161 @@ class _RealWebHlsBridge implements WebHlsBridge {
   @override
   Future<void> setSubtitleTrack(mpv.SubtitleTrack track, {String? serverBaseUrl}) async {
     if (_disposed) return;
+    final gen = ++_subtitleLoadGeneration;
 
-    // Clear existing <track> elements
-    _clearDomSubtitleTracks();
+    _parsedCues = [];
+    _currentSubtitleCueText = null;
+    if (!_disposed) _subtitleCueTextController.add(null);
 
     if (track.id == 'no') {
-      if (_hlsInstance != null) {
-        try {
-          js_util.setProperty(_hlsInstance!, 'subtitleTrack', -1);
-          js_util.setProperty(_hlsInstance!, 'subtitleDisplay', false);
-        } catch (_) {}
-      }
       return;
     }
 
-    // Embedded HLS subtitle track
-    if (track.id.startsWith('hls_sub_') && _hlsInstance != null) {
+    final urlsToTry = <String>[];
+
+    // 1. Embedded HLS subtitle track (`hls_sub_<index>` -> `/hlsv2/<session>/sub<index>.vtt`)
+    if (track.id.startsWith('hls_sub_') && _currentUrl != null) {
       final idx = int.tryParse(track.id.substring('hls_sub_'.length));
       if (idx != null && idx >= 0) {
-        try {
-          js_util.setProperty(_hlsInstance!, 'subtitleDisplay', true);
-          js_util.setProperty(_hlsInstance!, 'subtitleTrack', idx);
-        } catch (_) {}
+        final baseHlsDir = _currentUrl!.split('?').first.replaceAll(RegExp(r'/[^/]+$'), '');
+        urlsToTry.add('$baseHlsDir/sub$idx.vtt');
       }
-      return;
     }
 
-    // External URI subtitle track (SRT or VTT from OpenSubtitles / Addons)
-    final rawUrl = track.id;
-    if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) return;
-
-    try {
-      String fetchUrl = rawUrl;
-      // Use rivulet-engine's /subtitles.vtt?from=... converter if available
+    // 2. External URI subtitle track (OpenSubtitles / Addons)
+    if (track.id.startsWith('http://') || track.id.startsWith('https://')) {
+      final rawUrl = track.id;
       if (serverBaseUrl != null && serverBaseUrl.isNotEmpty) {
         final base = serverBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
-        fetchUrl = '$base/subtitles.vtt?from=${Uri.encodeComponent(rawUrl)}';
+        urlsToTry.add('$base/subtitles.vtt?from=${Uri.encodeComponent(rawUrl)}');
       }
+      urlsToTry.add(rawUrl);
+    }
 
-      String content = '';
+    for (final fetchUrl in urlsToTry) {
       try {
-        final res = await http.get(Uri.parse(fetchUrl)).timeout(const Duration(seconds: 8));
-        if (res.statusCode == 200 && res.body.trim().isNotEmpty) {
-          content = utf8.decode(res.bodyBytes, allowMalformed: true);
-        }
-      } catch (_) {}
-
-      if (content.isEmpty) {
-        final res = await http.get(Uri.parse(rawUrl)).timeout(const Duration(seconds: 8));
-        if (res.statusCode == 200) {
-          content = utf8.decode(res.bodyBytes, allowMalformed: true);
-        }
-      }
-
-      if (content.isEmpty || _disposed) return;
-
-      final vttContent = _ensureWebVttFormat(content);
-      final blob = html.Blob([utf8.encode(vttContent)], 'text/vtt');
-      final blobUrl = html.Url.createObjectUrlFromBlob(blob);
-      _activeSubtitleBlobUrl = blobUrl;
-
-      final trackEl = html.TrackElement()
-        ..kind = 'subtitles'
-        ..label = track.title ?? track.language ?? 'Subtítulos'
-        ..srclang = track.language ?? 'es'
-        ..src = blobUrl
-        ..defaultValue = true;
-
-      _videoElement.append(trackEl);
-
-      // Force textTrack mode = 'showing'
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (_disposed) return;
-        try {
-          final textTracks = _videoElement.textTracks;
-          if (textTracks != null) {
-            for (int i = 0; i < textTracks.length; i++) {
-              final tt = textTracks[i];
-              tt.mode = (i == textTracks.length - 1) ? 'showing' : 'disabled';
+        final res = await http.get(Uri.parse(fetchUrl)).timeout(const Duration(seconds: 25));
+        if (_disposed || gen != _subtitleLoadGeneration) return;
+        if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
+          final content = utf8.decode(res.bodyBytes, allowMalformed: true);
+          final cues = _parseSubtitlesToCues(content);
+          if (cues.isNotEmpty) {
+            _parsedCues = cues;
+            final curSec = _videoElement.currentTime;
+            if (!curSec.isNaN && !curSec.isInfinite) {
+              _updateActiveSubtitleCue(curSec);
             }
+            if (kDebugMode) {
+              debugPrint('[ValkeryWebHls] Loaded ${cues.length} subtitle cues from $fetchUrl');
+            }
+            return;
           }
-        } catch (_) {}
-      });
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[ValkeryWebHls] Failed to load external subtitle: $e');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[ValkeryWebHls] Subtitle fetch failed ($fetchUrl): $e');
+        }
       }
     }
   }
 
-  void _clearDomSubtitleTracks() {
-    try {
-      final textTracks = _videoElement.textTracks;
-      if (textTracks != null) {
-        for (int i = 0; i < textTracks.length; i++) {
-          textTracks[i].mode = 'disabled';
+  /// Parses SRT or WebVTT text into a sorted list of [_SubtitleCue]s.
+  List<_SubtitleCue> _parseSubtitlesToCues(String rawText) {
+    final normalized = rawText
+        .replaceAll('\uFEFF', '')
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .trim();
+    if (normalized.isEmpty) return const [];
+
+    final blocks = normalized.split(RegExp(r'\n\s*\n'));
+    final cues = <_SubtitleCue>[];
+
+    // Matches `00:01:23.456 --> 00:01:25.789` or `01:23,456 --> 01:25,789`
+    final timeLineRegex = RegExp(
+      r'(?:(\d{1,2}):)?(\d{2}):(\d{2})[.,](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{2}):(\d{2})[.,](\d{1,3})',
+    );
+
+    for (final block in blocks) {
+      final lines = block.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+      if (lines.isEmpty) continue;
+
+      int timeLineIdx = -1;
+      RegExpMatch? match;
+      for (int i = 0; i < lines.length; i++) {
+        final m = timeLineRegex.firstMatch(lines[i]);
+        if (m != null) {
+          timeLineIdx = i;
+          match = m;
+          break;
         }
       }
-      final children = _videoElement.children.whereType<html.TrackElement>().toList();
-      for (final child in children) {
-        child.remove();
+
+      if (timeLineIdx == -1 || match == null || timeLineIdx + 1 >= lines.length) {
+        continue;
       }
-      if (_activeSubtitleBlobUrl != null) {
-        html.Url.revokeObjectUrl(_activeSubtitleBlobUrl!);
-        _activeSubtitleBlobUrl = null;
+
+      final startSec = _parseTimestampGroups(
+        match.group(1),
+        match.group(2)!,
+        match.group(3)!,
+        match.group(4)!,
+      );
+      final endSec = _parseTimestampGroups(
+        match.group(5),
+        match.group(6)!,
+        match.group(7)!,
+        match.group(8)!,
+      );
+
+      final textLines = lines
+          .sublist(timeLineIdx + 1)
+          .map(_cleanSubtitleTags)
+          .where((l) => l.isNotEmpty)
+          .toList();
+
+      if (textLines.isNotEmpty && endSec > startSec) {
+        cues.add(
+          _SubtitleCue(
+            startSeconds: startSec,
+            endSeconds: endSec,
+            text: textLines.join('\n'),
+          ),
+        );
       }
-    } catch (_) {}
+    }
+
+    return cues;
   }
 
-  /// Converts SRT subtitle text to valid WebVTT if it is not already WebVTT
-  String _ensureWebVttFormat(String input) {
-    final trimmed = input.trimLeft();
-    if (trimmed.startsWith('WEBVTT')) return trimmed;
+  double _parseTimestampGroups(String? hStr, String mStr, String sStr, String msStr) {
+    final h = hStr != null ? (int.tryParse(hStr) ?? 0) : 0;
+    final m = int.tryParse(mStr) ?? 0;
+    final s = int.tryParse(sStr) ?? 0;
+    final msPadded = msStr.padRight(3, '0').substring(0, 3);
+    final ms = int.tryParse(msPadded) ?? 0;
+    return h * 3600.0 + m * 60.0 + s + (ms / 1000.0);
+  }
 
-    final normalized = trimmed.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-    // Convert SRT timestamps `00:01:23,456 --> 00:01:25,789` to WebVTT `00:01:23.456 --> 00:01:25.789`
-    final vttBody = normalized.replaceAllMapped(
-      RegExp(r'(\d{2}:\d{2}:\d{2}),(\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}),(\d{3})'),
-      (m) => '${m[1]}.${m[2]} --> ${m[3]}.${m[4]}',
-    );
-    return 'WEBVTT\n\n$vttBody\n';
+  String _cleanSubtitleTags(String line) {
+    return line
+        .replaceAll(RegExp(r'<[^>]*>'), '') // Strip <i>, <b>, <font>, <c.vtt>
+        .replaceAll(RegExp(r'\{\\[^}]*\}'), '') // Strip ASS/SSA override tags {\an8}
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .trim();
   }
 
   @override
   Widget buildVideoWidget({required BoxFit fit}) {
     setVideoFit(fit);
-    return HtmlElementView(viewType: _viewType);
+    return IgnorePointer(
+      ignoring: true,
+      child: HtmlElementView(viewType: _viewType),
+    );
   }
 
   void _destroyHls() {
@@ -733,7 +807,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
       sub.cancel();
     }
     _domSubscriptions.clear();
-    _clearDomSubtitleTracks();
+    _parsedCues = [];
     _destroyHls();
     try {
       _videoElement.pause();
@@ -750,6 +824,7 @@ class _RealWebHlsBridge implements WebHlsBridge {
     _audioTracksController.close();
     _subtitleTracksController.close();
     _autoMutedController.close();
+    _subtitleCueTextController.close();
   }
 
   @override
@@ -770,6 +845,8 @@ class _RealWebHlsBridge implements WebHlsBridge {
   Stream<List<mpv.SubtitleTrack>> get subtitleTracksStream => _subtitleTracksController.stream;
   @override
   Stream<bool> get autoMutedStream => _autoMutedController.stream;
+  @override
+  Stream<String?> get subtitleCueTextStream => _subtitleCueTextController.stream;
 
   @override
   bool get isPlaying => _isPlaying;
@@ -781,5 +858,6 @@ class _RealWebHlsBridge implements WebHlsBridge {
   Duration get buffer => _buffer;
   @override
   bool get isAutoMuted => _isAutoMuted;
+  @override
+  String? get currentSubtitleCueText => _currentSubtitleCueText;
 }
-

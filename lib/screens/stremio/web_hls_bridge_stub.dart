@@ -24,6 +24,8 @@ class _StubWebHlsBridge implements WebHlsBridge {
   Stream<List<mpv.SubtitleTrack>> get subtitleTracksStream => const Stream.empty();
   @override
   Stream<bool> get autoMutedStream => const Stream.empty();
+  @override
+  Stream<String?> get subtitleCueTextStream => const Stream.empty();
 
   @override
   bool get isPlaying => false;
@@ -35,6 +37,8 @@ class _StubWebHlsBridge implements WebHlsBridge {
   Duration get buffer => Duration.zero;
   @override
   bool get isAutoMuted => false;
+  @override
+  String? get currentSubtitleCueText => null;
 
   @override
   Future<void> open(String hlsUrl, {String? fallbackDirectUrl}) async {}

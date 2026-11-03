@@ -17,12 +17,14 @@ abstract class WebHlsBridge {
   Stream<List<mpv.AudioTrack>> get audioTracksStream;
   Stream<List<mpv.SubtitleTrack>> get subtitleTracksStream;
   Stream<bool> get autoMutedStream;
+  Stream<String?> get subtitleCueTextStream;
 
   bool get isPlaying;
   Duration get position;
   Duration get duration;
   Duration get buffer;
   bool get isAutoMuted;
+  String? get currentSubtitleCueText;
 
   Future<void> open(String hlsUrl, {String? fallbackDirectUrl});
   void play();
