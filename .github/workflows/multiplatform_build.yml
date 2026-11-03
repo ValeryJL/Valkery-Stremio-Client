@@ -34,6 +34,7 @@ jobs:
       - name: Build Windows Release
         run: |
           flutter build windows --release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           powershell -ExecutionPolicy Bypass -File ./scripts/fetch_streaming_engine.ps1 -TargetDir build/windows/x64/runner/Release
           Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath Valkery-Stremio-Client-Windows-x64.zip
       - name: Compile Inno Setup installer

@@ -16,7 +16,7 @@ class ValkeryFullscreenHelper {
       if (html.document.fullscreenElement != null) {
         html.document.exitFullscreen();
       } else {
-        await html.document.documentElement?.requestFullscreen();
+        html.document.documentElement?.requestFullscreen();
       }
       return;
     }
