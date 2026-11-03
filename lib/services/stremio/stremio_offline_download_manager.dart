@@ -196,10 +196,7 @@ class StremioOfflineDownloadManager {
 
   /// Initializes the offline directory and restores saved offline items metadata.
   Future<void> initialize() async {
-    if (kIsWeb) {
-      await _loadPersistedIndex();
-      return;
-    }
+    if (kIsWeb) return;
 
     final appDocDir = await getApplicationDocumentsDirectory();
     final offlineDir = Directory(p.join(appDocDir.path, 'Valkery', 'Offline'));

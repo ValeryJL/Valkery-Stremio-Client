@@ -1498,38 +1498,40 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
             ),
           ),
           const SizedBox(width: 12),
-          // Download Offline Button
-          IconButton(
-            tooltip: 'Descargar Offline',
-            icon: const Icon(IconsaxPlusLinear.document_download, color: Colors.white70),
-            onPressed: () async {
-              try {
-                final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
-                await ref.read(stremioOfflineDownloadManagerProvider).startDownload(
-                  media: media,
-                  stream: stream,
-                  serverUrl: serverUrl,
-                  season: _isSeries ? _selectedSeason : null,
-                  episode: _isSeries ? _selectedEpisode : null,
-                );
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Descarga iniciada: ${media.name}'),
-                      backgroundColor: const Color(0xFF8B5CF6),
-                    ),
+          // Download Offline Button (Native Desktop & Mobile only)
+          if (!kIsWeb) ...[
+            IconButton(
+              tooltip: 'Descargar Offline',
+              icon: const Icon(IconsaxPlusLinear.document_download, color: Colors.white70),
+              onPressed: () async {
+                try {
+                  final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
+                  await ref.read(stremioOfflineDownloadManagerProvider).startDownload(
+                    media: media,
+                    stream: stream,
+                    serverUrl: serverUrl,
+                    season: _isSeries ? _selectedSeason : null,
+                    episode: _isSeries ? _selectedEpisode : null,
                   );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Descarga iniciada: ${media.name}'),
+                        backgroundColor: const Color(0xFF8B5CF6),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error al iniciar descarga: $e')),
+                    );
+                  }
                 }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error al iniciar descarga: $e')),
-                  );
-                }
-              }
-            },
-          ),
-          const SizedBox(width: 6),
+              },
+            ),
+            const SizedBox(width: 6),
+          ],
           // Play Button
           FilledButton.icon(
             style: FilledButton.styleFrom(

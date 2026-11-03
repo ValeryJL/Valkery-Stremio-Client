@@ -76,7 +76,8 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
       StremioLibraryScreen(
         onExploreCatalog: isOfflineMode ? null : () => setState(() => _currentIndex = 0),
       ),
-      const StremioOfflineScreen(),
+      if (!kIsWeb)
+        const StremioOfflineScreen(),
       if (coordinator.isJellyfinActive)
         const ValkeryJellyfinView(),
       const ValkerySettingsScreen(),
@@ -117,11 +118,12 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
         selectedIcon: Icon(IconsaxPlusBold.folder_favorite, color: Color(0xFF8B5CF6)),
         label: 'Biblioteca',
       ),
-      NavigationDestination(
-        icon: offlineIcon,
-        selectedIcon: offlineSelectedIcon,
-        label: 'Offline',
-      ),
+      if (!kIsWeb)
+        NavigationDestination(
+          icon: offlineIcon,
+          selectedIcon: offlineSelectedIcon,
+          label: 'Offline',
+        ),
       if (coordinator.isJellyfinActive)
         const NavigationDestination(
           icon: Icon(IconsaxPlusLinear.video_square),
@@ -180,11 +182,12 @@ class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
                     Icon(IconsaxPlusBold.folder_favorite, color: Color(0xFF8B5CF6)),
                 label: Text('Biblioteca'),
               ),
-              NavigationRailDestination(
-                icon: offlineIcon,
-                selectedIcon: offlineSelectedIcon,
-                label: const Text('Offline'),
-              ),
+              if (!kIsWeb)
+                NavigationRailDestination(
+                  icon: offlineIcon,
+                  selectedIcon: offlineSelectedIcon,
+                  label: const Text('Offline'),
+                ),
               if (coordinator.isJellyfinActive)
                 const NavigationRailDestination(
                   icon: Icon(IconsaxPlusLinear.video_square),
