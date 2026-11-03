@@ -333,6 +333,18 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
     bool isFavorite,
     bool isPlayed,
   ) {
+    final downloads = ref.watch(stremioOfflineDownloadManagerProvider).allDownloads;
+    final completedOfflineEntry = downloads.cast<OfflineMediaEntry?>().firstWhere(
+          (d) =>
+              d != null &&
+              d.status == OfflineItemStatus.completed &&
+              (isSeries
+                  ? ((d.id == '${media.id}_S${_selectedSeason}E$_selectedEpisode') ||
+                     (d.id.startsWith(media.id) && d.season == _selectedSeason && d.episode == _selectedEpisode))
+                  : (d.id == media.id || d.id.startsWith(media.id))),
+          orElse: () => null,
+        );
+
     final posterWidget = Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
@@ -494,19 +506,7 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
         const SizedBox(height: 20),
 
         // Main Action Buttons Row (Reproducir, Fuentes, Favoritos, Visto)
-        final downloads = ref.watch(stremioOfflineDownloadManagerProvider).allDownloads;
-        final completedOfflineEntry = downloads.cast<OfflineMediaEntry?>().firstWhere(
-              (d) =>
-                  d != null &&
-                  d.status == OfflineItemStatus.completed &&
-                  (isSeries
-                      ? ((d.id == '${media.id}_S${_selectedSeason}E$_selectedEpisode') ||
-                         (d.id.startsWith(media.id) && d.season == _selectedSeason && d.episode == _selectedEpisode))
-                      : (d.id == media.id || d.id.startsWith(media.id))),
-              orElse: () => null,
-            );
-
-        return Wrap(
+        Wrap(
           spacing: 12,
           runSpacing: 10,
           crossAxisAlignment: WrapCrossAlignment.center,
