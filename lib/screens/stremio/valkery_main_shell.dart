@@ -8,6 +8,7 @@ import 'package:iconsax_plus/iconsax_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../providers/stremio_providers.dart';
+import '../../services/system_tray_service.dart';
 import 'stremio_discover_screen.dart';
 import 'stremio_library_screen.dart';
 import 'stremio_offline_screen.dart';
@@ -23,6 +24,15 @@ class ValkeryMainShell extends ConsumerStatefulWidget {
 
 class _ValkeryMainShellState extends ConsumerState<ValkeryMainShell> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pm = ref.read(stremioServerProcessManagerProvider);
+      SystemTrayService.instance.init(pm);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

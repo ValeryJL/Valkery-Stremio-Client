@@ -478,7 +478,7 @@ class StremioOfflineDownloadManager {
           // Limpiar artefactos de traducción automática estilo [cite: 2]
           final rawContent = utf8.decode(response.bodyBytes, allowMalformed: true);
           final cleanContent = rawContent.replaceAll(
-            RegExp(r'\[cite(?:_start|_end|:\s*[^\]]*)?\]', caseSensitive: false),
+            RegExp(r'\[cite[^\]]*\]', caseSensitive: false),
             '',
           );
           await subFile.writeAsString(cleanContent, encoding: utf8);

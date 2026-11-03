@@ -12,6 +12,8 @@ import 'package:media_kit/media_kit.dart' as mpv;
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:screen_brightness/screen_brightness.dart';
+import 'package:volume_controller/volume_controller.dart';
 
 import '../../models/stremio/media_item.dart' as stremio_model;
 import '../../models/stremio/stream_candidate.dart';
@@ -101,6 +103,16 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   String? _temporaryIndicatorText;
   IconData? _temporaryIndicatorIcon;
   Timer? _indicatorTimer;
+
+  // Gesture Controls (VLC style)
+  double? _dragInitialBrightness;
+  double? _currentBrightness;
+  double? _dragInitialVolume;
+  Offset? _dragStartPosition;
+  bool _isDragging = false;
+  bool _isDraggingLeft = false;
+  bool _isBuffering = false;
+  StreamSubscription<bool>? _bufferingSubscription;
 
   // Focus node for keyboard shortcuts
   final FocusNode _focusNode = FocusNode();
@@ -279,6 +291,12 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
               _playbackError = null;
             });
           }
+        }
+      });
+
+      _bufferingSubscription = player.stream.buffering.listen((isBuffering) {
+        if (mounted && _isBuffering != isBuffering) {
+          setState(() => _isBuffering = isBuffering);
         }
       });
 
@@ -468,6 +486,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
         await np.setProperty('network-timeout', '60');
         await np.setProperty('cache', 'yes');
+        await np.setProperty('cache-pause', 'yes');
+        await np.setProperty('cache-pause-wait', '3');
+        await np.setProperty('cache-pause-initial', 'yes');
         await np.setProperty('stream-lavf-o', 'reconnect_streamed=1,reconnect_delay_max=5');
         // Estilo moderno de subtítulos (fondo translúcido redondeado y texto nítido)
         await np.setProperty('sub-font', 'Rubik');
@@ -515,6 +536,29 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       await Future.delayed(const Duration(milliseconds: 600));
       checks++;
       if (_isMetadataReady || !mounted) break;
+    }
+
+    // 3. Pre-búfer inicial seguro para evitar tartamudeos o congelamientos cada 2 segundos
+    // En streams torrent, esperamos a tener al menos 14 MB (o 6 MB si la velocidad es rápida > 1.2 MB/s)
+    final int minBufferBytes = 14 * 1024 * 1024;
+    int bufferChecks = 0;
+    while (mounted && _isInitialLoading && bufferChecks < 40) {
+      final hasEnoughBytes = _torrentDownloadedBytes >= minBufferBytes;
+      final hasHighSpeed = _torrentDownloadSpeed > 1.2 * 1024 * 1024 && _torrentDownloadedBytes >= 6 * 1024 * 1024;
+      if (hasEnoughBytes || hasHighSpeed) break;
+
+      final cachedMb = (_torrentDownloadedBytes / (1024 * 1024)).toStringAsFixed(1);
+      final targetMb = (minBufferBytes / (1024 * 1024)).toStringAsFixed(0);
+      final pct = ((_torrentDownloadedBytes / minBufferBytes).clamp(0.0, 1.0) * 100).toStringAsFixed(0);
+
+      setState(() {
+        _torrentStatusMessage = _torrentPeers > 0
+            ? 'Cargando búfer seguro ($cachedMb / $targetMb MB • $pct% • ${_torrentPeers} pares)...'
+            : 'Conectando con pares y cargando búfer ($cachedMb MB)...';
+      });
+
+      await Future.delayed(const Duration(milliseconds: 600));
+      bufferChecks++;
     }
 
     if (mounted && _isInitialLoading) {
@@ -673,7 +717,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         content = await f.readAsString();
       }
 
-      final citeRegex = RegExp(r'\[cite(?:_start|_end|:\s*[^\]]*)?\]', caseSensitive: false);
+      final citeRegex = RegExp(r'\[cite[^\]]*\]', caseSensitive: false);
       if (!citeRegex.hasMatch(content)) {
         if (!urlOrPath.startsWith('http')) return urlOrPath;
       }
@@ -744,7 +788,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
             final raw = subFile.readAsStringSync();
             if (raw.contains('[cite')) {
               final cleaned = raw.replaceAll(
-                RegExp(r'\[cite(?:_start|_end|:\s*[^\]]*)?\]', caseSensitive: false),
+                RegExp(r'\[cite[^\]]*\]', caseSensitive: false),
                 '',
               );
               subFile.writeAsStringSync(cleaned, encoding: utf8);
@@ -1067,6 +1111,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _positionSubscription?.cancel();
     _logSubscription?.cancel();
     _errorSubscription?.cancel();
+    _bufferingSubscription?.cancel();
     _tracksSubscription?.cancel();
     _webSubTracksSubscription?.cancel();
     _webSubtitleCueSubscription?.cancel();
@@ -1083,6 +1128,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   Widget build(BuildContext context) {
     final isDesktopPlatform =
         !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
 
     return PopScope(
       canPop: true,
@@ -1115,7 +1163,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                 _showControls();
                 return;
               }
-              if (fullScreenHelper.isDesktopPlatform || kIsWeb) {
+              if (isDesktopPlatform || kIsWeb) {
                 // Single click on desktop/web toggles play/pause
                 _playOrPauseUnified();
                 _showControls();
@@ -1123,8 +1171,66 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                 _toggleControls();
               }
             },
-            onDoubleTap: () {
-              fullScreenHelper.toggleFullScreen(ref);
+            onDoubleTapDown: (details) {
+              if (isMobile) {
+                final dx = details.localPosition.dx;
+                if (dx < screenWidth * 0.38) {
+                  // Doble toque a la izquierda: retroceder 10s estilo VLC
+                  _seekRelative(-10);
+                } else if (dx > screenWidth * 0.62) {
+                  // Doble toque a la derecha: adelantar 10s estilo VLC
+                  _seekRelative(10);
+                } else {
+                  // Doble toque en el centro: alternar reproducción/pausa
+                  _playOrPauseUnified();
+                }
+              } else {
+                fullScreenHelper.toggleFullScreen(ref);
+              }
+            },
+            onVerticalDragStart: (details) async {
+              if (!isMobile) return;
+              _isDragging = true;
+              _isDraggingLeft = details.localPosition.dx < (screenWidth * 0.5);
+
+              if (_isDraggingLeft) {
+                try {
+                  _dragInitialBrightness = await ScreenBrightness().current;
+                  _currentBrightness = _dragInitialBrightness;
+                } catch (_) {
+                  _dragInitialBrightness = 0.5;
+                  _currentBrightness = 0.5;
+                }
+              }
+            },
+            onVerticalDragUpdate: (details) async {
+              if (!isMobile || !_isDragging) return;
+              final deltaY = -details.primaryDelta!; // Arrastre hacia arriba aumenta
+              final sensitivity = screenHeight * 0.55;
+
+              if (_isDraggingLeft) {
+                // Ajustar brillo de pantalla
+                try {
+                  final cur = _currentBrightness ?? 0.5;
+                  final next = (cur + (deltaY / sensitivity)).clamp(0.01, 1.0);
+                  _currentBrightness = next;
+                  await ScreenBrightness().setScreenBrightness(next);
+                  _showIndicator(
+                    'Brillo ${(next * 100).round()}%',
+                    Icons.brightness_6_rounded,
+                  );
+                } catch (_) {}
+              } else {
+                // Ajustar volumen
+                final volDelta = deltaY * (100.0 / sensitivity);
+                _adjustVolume(volDelta);
+              }
+            },
+            onVerticalDragEnd: (_) {
+              _isDragging = false;
+            },
+            onVerticalDragCancel: () {
+              _isDragging = false;
             },
             child: Stack(
               fit: StackFit.expand,
@@ -1321,6 +1427,65 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                               final streamUrl = widget.localFilePath ?? widget.stream.playbackUrlFor(serverUrl);
                               await ExternalPlayerLauncher.openInVlc(streamUrl);
                             },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // Center Live Buffering Indicator (cuando el reproductor pausa para llenar búfer)
+                if (_isBuffering && !_isInitialLoading && _playbackError == null)
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black87,
+                            blurRadius: 20,
+                            spreadRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.8,
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5CF6)),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Cargando búfer seguro...',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              if (_torrentDownloadSpeed > 0)
+                                Text(
+                                  '${_formatSpeed(_torrentDownloadSpeed)} • ${_torrentPeers} pares',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                            ],
                           ),
                         ],
                       ),

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:iconsax_plus/iconsax_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../services/system_tray_service.dart';
+
 class ValkeryDesktopTitleBar extends StatefulWidget {
   final String title;
 
@@ -199,7 +201,7 @@ class _ValkeryDesktopTitleBarState extends State<ValkeryDesktopTitleBar> with Wi
                   size: 18,
                   color: iconColor,
                 ),
-                onPressed: () => windowManager.close(),
+                onPressed: () => SystemTrayService.instance.exitApp(),
               ),
             ],
           ),

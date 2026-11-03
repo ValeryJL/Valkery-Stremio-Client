@@ -47,12 +47,43 @@ Name: "{autodesktop}\Valkery Stremio"; Filename: "{app}\valkery.exe"; Tasks: des
 [Run]
 Filename: "{app}\valkery.exe"; Description: "{cm:LaunchProgram,Valkery Stremio}"; Flags: nowait postinstall skipifsilent
 
+[InstallDelete]
+Type: files; Name: "{app}\stream-server.exe"
+
+[UninstallRun]
+Filename: "taskkill.exe"; Parameters: "/F /IM valkery.exe /IM stream-server.exe"; Flags: runhidden
+
+[UninstallDelete]
+Type: files; Name: "{app}\stream-server.exe"
+Type: filesandordirs; Name: "{app}"
+
 [Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  // Detener valkery.exe y stream-server.exe antes de instalar o actualizar
+  Exec('taskkill.exe', '/F /IM valkery.exe /IM stream-server.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := '';
+end;
+
+function InitializeUninstall(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  // Detener procesos antes de iniciar la desinstalación
+  Exec('taskkill.exe', '/F /IM valkery.exe /IM stream-server.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := True;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ResultCode: Integer;
 begin
   case CurUninstallStep of
     usUninstall:
       begin
+        Exec('taskkill.exe', '/F /IM valkery.exe /IM stream-server.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
         if MsgBox('Would you like to delete the application''s data? This action cannot be undone. Synced files will remain unaffected.', mbConfirmation, MB_YESNO) = IDYES then
         begin
             if DelTree(ExpandConstant('{localappdata}\ValkeryStremio'), True, True, True) = False then

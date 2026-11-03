@@ -1202,6 +1202,16 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
     MediaItem media,
     bool isSeries,
   ) {
+    final downloadManager = ref.watch(stremioOfflineDownloadManagerProvider);
+    final downloads = downloadManager.allDownloads;
+    final offlineEntry = downloads.cast<OfflineMediaEntry?>().firstWhere(
+      (d) =>
+          d?.mediaId == media.id &&
+          (!isSeries ||
+              (d?.season == _selectedSeason && d?.episode == _selectedEpisode)),
+      orElse: () => null,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1227,7 +1237,11 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
+
+        // 1. Tarjeta destacada de Almacenamiento Local (si está descargado o descargando)
+        if (offlineEntry != null)
+          _buildLocalOfflineStreamCard(offlineEntry, coordinator, media),
 
         // Filter chips: Web Ready vs All
         Wrap(
@@ -1664,6 +1678,202 @@ class _StremioDetailScreenState extends ConsumerState<StremioDetailScreen> {
         ],
       ),
     );
+  }
+
+  /// Tarjeta destacada de stream local descargado
+  Widget _buildLocalOfflineStreamCard(
+    OfflineMediaEntry entry,
+    SourceCoordinatorState coordinator,
+    MediaItem media,
+  ) {
+    final isCompleted = entry.status == OfflineItemStatus.completed;
+    final isDownloading = entry.status == OfflineItemStatus.downloading;
+    final totalBytes = entry.totalBytes > 0 ? entry.totalBytes : entry.downloadedBytes;
+    final bytesLabel = _formatBytes(totalBytes);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF10B981).withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF10B981).withValues(alpha: 0.55),
+          width: 1.5,
+        ),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF10B981)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(IconsaxPlusBold.folder_favorite, size: 14, color: Color(0xFF10B981)),
+                    const SizedBox(width: 6),
+                    Text(
+                      isCompleted ? 'DESCARGADO EN TU DISPOSITIVO' : 'DESCARGANDO AHORA...',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF10B981),
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              if (isCompleted)
+                IconButton(
+                  tooltip: 'Eliminar descarga local',
+                  icon: const Icon(IconsaxPlusLinear.trash, color: Colors.redAccent, size: 20),
+                  onPressed: () => _confirmDeleteLocalDownload(entry),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isCompleted
+                          ? 'Almacenamiento Local (Reproducción sin internet)'
+                          : 'Descarga en progreso: ${(entry.progress * 100).toStringAsFixed(0)}%',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isCompleted
+                          ? '$bytesLabel • ${entry.subtitles.length} subtítulos locales listos'
+                          : '${_formatBytes(entry.downloadedBytes)} de $bytesLabel',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withValues(alpha: 0.70),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isCompleted) ...[
+                // Open in VLC
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orangeAccent,
+                    side: BorderSide(color: Colors.orangeAccent.withValues(alpha: 0.6)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  icon: const Icon(Icons.open_in_new, size: 15),
+                  label: const Text('VLC', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  onPressed: () => ExternalPlayerLauncher.openInVlc(entry.localVideoPath),
+                ),
+                const SizedBox(width: 8),
+                // Internal Player Play Button
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    elevation: 3,
+                  ),
+                  icon: const Icon(IconsaxPlusBold.play, size: 16),
+                  label: const Text('Ver', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StremioPlayerScreen(
+                          media: media,
+                          stream: StreamCandidate(
+                            name: 'Almacenamiento Local',
+                            title: 'Archivo descargado',
+                            url: entry.localVideoPath,
+                            quality: 'Local',
+                            behaviorHints: const {'notWebReady': false},
+                          ),
+                          localFilePath: entry.localVideoPath,
+                          localSubtitles: entry.subtitles,
+                          season: _isSeries ? _selectedSeason : null,
+                          episode: _isSeries ? _selectedEpisode : null,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ],
+          ),
+          if (isDownloading) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: entry.progress,
+                backgroundColor: Colors.white12,
+                color: const Color(0xFF10B981),
+                minHeight: 6,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteLocalDownload(OfflineMediaEntry entry) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1B2E),
+        title: const Text('¿Eliminar descarga local?'),
+        content: Text('Se liberará el espacio en disco de este archivo (${_formatBytes(entry.totalBytes > 0 ? entry.totalBytes : entry.downloadedBytes)}).'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      await ref.read(stremioOfflineDownloadManagerProvider).deleteDownload(entry.id);
+      setState(() {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Descarga local eliminada')),
+        );
+      }
+    }
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 MB';
+    final mb = bytes / (1024 * 1024);
+    if (mb >= 1024) {
+      return '${(mb / 1024).toStringAsFixed(2)} GB';
+    }
+    return '${mb.toStringAsFixed(1)} MB';
   }
 
   void _handlePlayStream(StreamCandidate stream, MediaItem media) {
