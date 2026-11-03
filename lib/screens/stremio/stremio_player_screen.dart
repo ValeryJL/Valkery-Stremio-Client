@@ -20,6 +20,7 @@ import '../../models/stremio/watch_history_item.dart';
 import '../../providers/stremio_providers.dart';
 import '../../util/external_player_launcher.dart';
 import 'valkery_desktop_title_bar.dart';
+import 'web_hls_bridge.dart';
 import '../../providers/source_coordinator_provider.dart';
 
 class StremioPlayerScreen extends ConsumerStatefulWidget {
@@ -43,15 +44,19 @@ class StremioPlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
-  late final mpv.Player _player;
-  late final VideoController _controller;
+  mpv.Player? _player;
+  VideoController? _controller;
+  WebHlsBridge? _webBridge;
 
   StreamSubscription? _errorSubscription;
   StreamSubscription? _tracksSubscription;
+  StreamSubscription? _webSubTracksSubscription;
+  StreamSubscription? _webAutoMutedSubscription;
   Timer? _progressSyncTimer;
   Timer? _hideControlsTimer;
 
   bool _isControlsVisible = true;
+  bool _isWebAutoMuted = false;
   String? _playbackError;
   bool _isRetrying = false;
   bool _isInitialLoading = true;
@@ -95,152 +100,205 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   StreamSubscription<bool>? _playingSubscription;
   StreamSubscription<bool>? _completedSubscription;
 
+  // Unified Player Helpers (WebHlsBridge on Web, media_kit on Native)
+  Stream<bool> get _playingStream =>
+      kIsWeb ? _webBridge!.playingStream : _player!.stream.playing;
+  Stream<Duration> get _positionStream =>
+      kIsWeb ? _webBridge!.positionStream : _player!.stream.position;
+  bool get _isPlayingNow =>
+      kIsWeb ? _webBridge!.isPlaying : _player!.state.playing;
+  Duration get _currentPosition =>
+      kIsWeb ? _webBridge!.position : _player!.state.position;
+  Duration get _currentDuration =>
+      kIsWeb ? _webBridge!.duration : _player!.state.duration;
+  Duration get _currentBuffer =>
+      kIsWeb ? _webBridge!.buffer : _player!.state.buffer;
+
+  void _playUnified() {
+    if (kIsWeb) {
+      _webBridge?.play();
+    } else {
+      _player?.play();
+    }
+  }
+
+  void _playOrPauseUnified() {
+    if (kIsWeb) {
+      if (_isWebAutoMuted) {
+        _webBridge?.unmuteFromUserGesture(_volume);
+        return;
+      }
+      _webBridge?.playOrPause();
+    } else {
+      _player?.playOrPause();
+    }
+  }
+
+  void _seekUnified(Duration target) {
+    if (kIsWeb) {
+      _webBridge?.seek(target);
+    } else {
+      _player?.seek(target);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
 
-    _player = mpv.Player(
-      configuration: const mpv.PlayerConfiguration(
-        title: 'Valkery',
-        bufferSize: 128 * 1024 * 1024,
-      ),
-    );
+    if (kIsWeb) {
+      final bridge = WebHlsBridge();
+      _webBridge = bridge;
 
-    _controller = VideoController(
-      _player,
-      configuration: const VideoControllerConfiguration(
-        enableHardwareAcceleration: true,
-      ),
-    );
+      _errorSubscription = bridge.errorStream.listen(_handlePlayerError);
 
-    _errorSubscription = _player.stream.error.listen((err) {
-      if (!mounted) return;
-      if (kDebugMode) {
-        debugPrint('[ValkeryPlayer/error] $err (loading: $_isInitialLoading, retry: $_openRetryCount)');
-      }
-
-      final errStr = err.toString().toLowerCase();
-      // Browser autoplay / gesture restrictions or harmless load interruptions
-      final isAutoplayOrInterrupted = errStr.contains('notallowed') ||
-          errStr.contains('user didn\'t interact') ||
-          errStr.contains('gesture') ||
-          errStr.contains('interrupted') ||
-          errStr.contains('aborterror');
-
-      if (isAutoplayOrInterrupted) {
-        if (kDebugMode) {
-          debugPrint('[ValkeryPlayer] Browser autoplay suspended or interrupted; keeping player ready for user interaction.');
+      _durationSubscription = bridge.durationStream.listen((dur) {
+        if (dur > Duration.zero && mounted) {
+          if (_isInitialLoading || _playbackError != null) {
+            setState(() {
+              _isInitialLoading = false;
+              _playbackError = null;
+            });
+          }
         }
+      });
+
+      _positionSubscription = bridge.positionStream.listen((pos) {
+        if (pos > Duration.zero && mounted) {
+          if (_isInitialLoading || _playbackError != null) {
+            setState(() {
+              _isInitialLoading = false;
+              _playbackError = null;
+            });
+          }
+        }
+      });
+
+      _tracksSubscription = bridge.audioTracksStream.listen((tracks) {
+        if (mounted && tracks.isNotEmpty) {
+          setState(() {
+            _audioTracks = tracks;
+            if (_currentAudioTrack.id == 'auto' || _currentAudioTrack.id == 'no') {
+              _currentAudioTrack = tracks.first;
+            }
+          });
+        }
+      });
+
+      _webSubTracksSubscription = bridge.subtitleTracksStream.listen((subs) {
+        if (mounted && subs.isNotEmpty) {
+          setState(() {
+            _embeddedSubtitles = subs;
+          });
+        }
+      });
+
+      _webAutoMutedSubscription = bridge.autoMutedStream.listen((muted) {
+        if (mounted) {
+          setState(() => _isWebAutoMuted = muted);
+        }
+      });
+
+      _playingSubscription = bridge.playingStream.listen((isPlaying) {
+        if (isPlaying) {
+          if (mounted && (_playbackError != null || _isInitialLoading)) {
+            setState(() {
+              _playbackError = null;
+              _isInitialLoading = false;
+            });
+          }
+        } else {
+          _savePlaybackProgress();
+        }
+      });
+
+      _completedSubscription = bridge.completedStream.listen((completed) {
+        if (completed) {
+          _savePlaybackProgress(isCompleted: true);
+        }
+      });
+    } else {
+      final player = mpv.Player(
+        configuration: const mpv.PlayerConfiguration(
+          title: 'Valkery',
+          bufferSize: 128 * 1024 * 1024,
+        ),
+      );
+      _player = player;
+
+      _controller = VideoController(
+        player,
+        configuration: const VideoControllerConfiguration(
+          enableHardwareAcceleration: true,
+        ),
+      );
+
+      _errorSubscription = player.stream.error.listen(_handlePlayerError);
+
+      _durationSubscription = player.stream.duration.listen((dur) {
+        if (dur > Duration.zero && mounted) {
+          if (_isInitialLoading || _playbackError != null) {
+            setState(() {
+              _isInitialLoading = false;
+              _playbackError = null;
+            });
+          }
+        }
+      });
+
+      _positionSubscription = player.stream.position.listen((pos) {
+        if (pos > Duration.zero && mounted) {
+          if (_isInitialLoading || _playbackError != null) {
+            setState(() {
+              _isInitialLoading = false;
+              _playbackError = null;
+            });
+          }
+        }
+      });
+
+      _logSubscription = player.stream.log.listen((event) {
+        if (kDebugMode) {
+          debugPrint('[ValkeryPlayer/mpv] [${event.level}] ${event.text}');
+        }
+      });
+
+      _tracksSubscription = player.stream.tracks.listen((tracks) {
         if (mounted) {
           setState(() {
-            _playbackError = null;
-            _isInitialLoading = false;
-            _isControlsVisible = true;
+            _embeddedSubtitles = tracks.subtitle;
+            _audioTracks = tracks.audio;
+            _currentSubtitleTrack = player.state.track.subtitle;
+            _currentAudioTrack = player.state.track.audio;
           });
         }
-        return;
-      }
-
-      // If duration is already known, media container demuxing succeeded - transient errors are not fatal
-      final hasDecodedDuration = _player.state.duration > Duration.zero;
-      if (hasDecodedDuration) {
-        if (kDebugMode) {
-          debugPrint('[ValkeryPlayer] Non-fatal transient buffer alert while duration is known: $err');
-        }
-        return;
-      }
-
-      // If initial loading failed and we have retries left (or active torrent swarm downloading), wait and re-open cleanly
-      final bool hasActiveSwarm = _torrentPeers > 0 || _torrentDownloadedBytes > 0;
-      final int effectiveMaxRetries = (kIsWeb || hasActiveSwarm) ? _maxRetries : 10;
-
-      if (_isInitialLoading && _openRetryCount < effectiveMaxRetries) {
-        _openRetryCount++;
-        setState(() {
-          _torrentStatusMessage = hasActiveSwarm
-              ? 'Descargando búfer (${(_torrentDownloadedBytes / (1024 * 1024)).toStringAsFixed(1)} MB cacheados)...'
-              : 'Conectando al búfer (reintentando conexión $_openRetryCount/$effectiveMaxRetries)...';
-        });
-        Future.delayed(const Duration(milliseconds: 2500), () {
-          if (mounted && _isInitialLoading) {
-            _openStreamInPlayer();
-          }
-        });
-        return;
-      }
-
-      setState(() {
-        _playbackError = err;
-        _isInitialLoading = false;
-        _isControlsVisible = true;
       });
-      _torrentStatsTimer?.cancel();
-    });
 
-    _durationSubscription = _player.stream.duration.listen((dur) {
-      if (dur > Duration.zero && mounted) {
-        if (_isInitialLoading || _playbackError != null) {
-          setState(() {
-            _isInitialLoading = false;
-            _playbackError = null;
-          });
+      _playingSubscription = player.stream.playing.listen((isPlaying) {
+        if (isPlaying) {
+          if (mounted && _playbackError != null) {
+            setState(() => _playbackError = null);
+          }
+          player.setVolume(_volume);
+        } else {
+          _savePlaybackProgress();
         }
-      }
-    });
+      });
 
-    _positionSubscription = _player.stream.position.listen((pos) {
-      if (pos > Duration.zero && mounted) {
-        if (_isInitialLoading || _playbackError != null) {
-          setState(() {
-            _isInitialLoading = false;
-            _playbackError = null;
-          });
+      _completedSubscription = player.stream.completed.listen((completed) {
+        if (completed) {
+          _savePlaybackProgress(isCompleted: true);
         }
-      }
-    });
-
-    _logSubscription = _player.stream.log.listen((event) {
-      if (kDebugMode) {
-        debugPrint('[ValkeryPlayer/mpv] [${event.level}] ${event.text}');
-      }
-    });
-
-    _tracksSubscription = _player.stream.tracks.listen((tracks) {
-      if (mounted) {
-        setState(() {
-          _embeddedSubtitles = tracks.subtitle;
-          _audioTracks = tracks.audio;
-          _currentSubtitleTrack = _player.state.track.subtitle;
-          _currentAudioTrack = _player.state.track.audio;
-        });
-      }
-    });
-
-    _playingSubscription = _player.stream.playing.listen((isPlaying) {
-      if (isPlaying) {
-        if (mounted && _playbackError != null) {
-          setState(() => _playbackError = null);
-        }
-        // Ensure audio is active and unmuted on Web & Native
-        _player.setVolume(_volume);
-      } else {
-        _savePlaybackProgress();
-      }
-    });
-
-    _completedSubscription = _player.stream.completed.listen((completed) {
-      if (completed) {
-        _savePlaybackProgress(isCompleted: true);
-      }
-    });
+      });
+    }
 
     // Auto-resume from saved playback progress
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final saved = ref.read(stremioStorageProvider).getWatchState(widget.media.id);
       if (saved != null && saved.timeOffset > 10 && saved.duration > 0 && (saved.timeOffset < (saved.duration * 0.92))) {
         Future.delayed(const Duration(milliseconds: 1600), () {
-          if (mounted && _player.state.duration.inSeconds > 0) {
-            _player.seek(Duration(seconds: saved.timeOffset));
+          if (mounted && _currentDuration.inSeconds > 0) {
+            _seekUnified(Duration(seconds: saved.timeOffset));
             final min = saved.timeOffset ~/ 60;
             final sec = saved.timeOffset % 60;
             _showIndicator(
@@ -258,6 +316,64 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _resetHideControlsTimer();
   }
 
+  void _handlePlayerError(String err) {
+    if (!mounted) return;
+    if (kDebugMode) {
+      debugPrint('[ValkeryPlayer/error] $err (loading: $_isInitialLoading, retry: $_openRetryCount)');
+    }
+
+    final errStr = err.toString().toLowerCase();
+    final isAutoplayOrInterrupted = errStr.contains('notallowed') ||
+        errStr.contains('user didn\'t interact') ||
+        errStr.contains('gesture') ||
+        errStr.contains('interrupted') ||
+        errStr.contains('aborterror');
+
+    if (isAutoplayOrInterrupted) {
+      if (mounted) {
+        setState(() {
+          _playbackError = null;
+          _isInitialLoading = false;
+          _isControlsVisible = true;
+        });
+      }
+      return;
+    }
+
+    final hasDecodedDuration = _currentDuration > Duration.zero;
+    if (hasDecodedDuration) {
+      if (kDebugMode) {
+        debugPrint('[ValkeryPlayer] Non-fatal transient buffer alert while duration is known: $err');
+      }
+      return;
+    }
+
+    final bool hasActiveSwarm = _torrentPeers > 0 || _torrentDownloadedBytes > 0;
+    final int effectiveMaxRetries = (kIsWeb || hasActiveSwarm) ? _maxRetries : 10;
+
+    if (_isInitialLoading && _openRetryCount < effectiveMaxRetries) {
+      _openRetryCount++;
+      setState(() {
+        _torrentStatusMessage = hasActiveSwarm
+            ? 'Descargando búfer (${(_torrentDownloadedBytes / (1024 * 1024)).toStringAsFixed(1)} MB cacheados)...'
+            : 'Conectando al búfer (reintentando conexión $_openRetryCount/$effectiveMaxRetries)...';
+      });
+      Future.delayed(const Duration(milliseconds: 2500), () {
+        if (mounted && _isInitialLoading) {
+          _openStreamInPlayer();
+        }
+      });
+      return;
+    }
+
+    setState(() {
+      _playbackError = err;
+      _isInitialLoading = false;
+      _isControlsVisible = true;
+    });
+    _torrentStatsTimer?.cancel();
+  }
+
   Future<void> _initMpvPropertiesAndPlay() async {
     setState(() {
       _playbackError = null;
@@ -273,8 +389,8 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _startTorrentStatsTimer();
 
     try {
-      if (_player.platform is mpv.NativePlayer) {
-        final np = _player.platform as dynamic;
+      if (!kIsWeb && _player?.platform is mpv.NativePlayer) {
+        final np = _player!.platform as dynamic;
         await np.setProperty('hwdec', 'auto-safe');
         await np.setProperty('demuxer-max-bytes', '256M');
         await np.setProperty('demuxer-readahead-secs', '30');
@@ -328,10 +444,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   Future<void> _openStreamInPlayer() async {
     if (!mounted) return;
     final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
+    final directUrl = widget.localFilePath ?? widget.stream.playbackUrlFor(serverUrl);
     final url = widget.localFilePath ??
-        ((kIsWeb && (widget.stream.isTorrent || !widget.stream.isWebCompatible))
+        (kIsWeb
             ? widget.stream.hlsPlaybackUrlFor(serverUrl)
-            : widget.stream.playbackUrlFor(serverUrl));
+            : directUrl);
 
     if (kDebugMode) {
       debugPrint('[ValkeryPlayer] Opening stream (attempt ${_openRetryCount + 1}): $url');
@@ -340,14 +457,14 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     // On Web, if using HLS, ensure transcode playlist is responsive before attaching to HTML5 video element
     if (kIsWeb && url.contains('/hlsv2/')) {
       try {
-        final headRes = await http.head(Uri.parse(url)).timeout(const Duration(seconds: 4));
+        final headRes = await http.head(Uri.parse(url)).timeout(const Duration(seconds: 6));
         if (headRes.statusCode != 200 && headRes.statusCode != 206) {
           if (_openRetryCount < _maxRetries) {
             _openRetryCount++;
             setState(() {
               _torrentStatusMessage = 'Preparando transcodificación HLS (reintentando $_openRetryCount/$_maxRetries)...';
             });
-            Future.delayed(const Duration(milliseconds: 2500), () {
+            Future.delayed(const Duration(milliseconds: 2000), () {
               if (mounted && _isInitialLoading) {
                 _openStreamInPlayer();
               }
@@ -361,7 +478,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           setState(() {
             _torrentStatusMessage = 'Iniciando búfer HLS (reintentando $_openRetryCount/$_maxRetries)...';
           });
-          Future.delayed(const Duration(milliseconds: 2500), () {
+          Future.delayed(const Duration(milliseconds: 2000), () {
             if (mounted && _isInitialLoading) {
               _openStreamInPlayer();
             }
@@ -372,8 +489,13 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     }
 
     try {
-      await _player.open(mpv.Media(url));
-      await _player.setVolume(_volume);
+      if (kIsWeb) {
+        await _webBridge?.open(url, fallbackDirectUrl: directUrl);
+        _webBridge?.setVolume(_isMuted ? 0.0 : _volume);
+      } else {
+        await _player?.open(mpv.Media(url));
+        await _player?.setVolume(_isMuted ? 0.0 : _volume);
+      }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[ValkeryPlayer] Player.open caught exception: $e');
@@ -477,7 +599,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _hideControlsTimer?.cancel();
     if (_isControlsVisible) {
       _hideControlsTimer = Timer(const Duration(milliseconds: 3500), () {
-        if (mounted && _playbackError == null && _player.state.playing) {
+        if (mounted && _playbackError == null && _isPlayingNow) {
           setState(() => _isControlsVisible = false);
         }
       });
@@ -515,14 +637,14 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   }
 
   void _seekRelative(int seconds) {
-    final current = _player.state.position;
-    final total = _player.state.duration;
+    final current = _currentPosition;
+    final total = _currentDuration;
     final target = current + Duration(seconds: seconds);
     final clamped = target < Duration.zero
         ? Duration.zero
-        : (target > total ? total : target);
+        : (total > Duration.zero && target > total ? total : target);
 
-    _player.seek(clamped);
+    _seekUnified(clamped);
     _showIndicator(
       seconds > 0 ? '+$seconds s' : '$seconds s',
       seconds > 0 ? IconsaxPlusLinear.forward_10_seconds : IconsaxPlusLinear.backward_10_seconds,
@@ -539,8 +661,13 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     setState(() {
       _volume = val;
       _isMuted = val == 0.0;
+      if (val > 0) _isWebAutoMuted = false;
     });
-    _player.setVolume(val);
+    if (kIsWeb) {
+      _webBridge?.setVolume(val);
+    } else {
+      _player?.setVolume(val);
+    }
     _showIndicator(
       '${val.round()}%',
       _isMuted
@@ -551,8 +678,8 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   }
 
   void _toggleMute() {
-    if (_isMuted) {
-      _setVolume(_volumeBeforeMute > 0 ? _volumeBeforeMute : 50.0);
+    if (_isMuted || _isWebAutoMuted) {
+      _setVolume(_volumeBeforeMute > 0 ? _volumeBeforeMute : 100.0);
     } else {
       _volumeBeforeMute = _volume;
       _setVolume(0.0);
@@ -561,7 +688,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
   void _setPlaybackRate(double rate) {
     setState(() => _playbackRate = rate);
-    _player.setRate(rate);
+    if (kIsWeb) {
+      _webBridge?.setRate(rate);
+    } else {
+      _player?.setRate(rate);
+    }
     _showIndicator('${rate}x', IconsaxPlusLinear.speedometer);
     _showControls();
   }
@@ -578,6 +709,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         _videoFit = BoxFit.contain;
         _showIndicator('Ajuste: Contener (Original)', Icons.aspect_ratio);
       }
+      if (kIsWeb) {
+        _webBridge?.setVideoFit(_videoFit);
+      }
     });
     _showControls();
   }
@@ -587,7 +721,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.keyK) {
-      _player.playOrPause();
+      _playOrPauseUnified();
       _showControls();
     } else if (key == LogicalKeyboardKey.arrowLeft) {
       _seekRelative(-10);
@@ -611,8 +745,8 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
   }
 
   Future<void> _savePlaybackProgress({bool isCompleted = false}) async {
-    final position = _player.state.position.inSeconds;
-    final duration = _player.state.duration.inSeconds;
+    final position = _currentPosition.inSeconds;
+    final duration = _currentDuration.inSeconds;
 
     if (position > 0 && duration > 0) {
       final storage = ref.read(stremioStorageProvider);
@@ -674,10 +808,13 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     _logSubscription?.cancel();
     _errorSubscription?.cancel();
     _tracksSubscription?.cancel();
+    _webSubTracksSubscription?.cancel();
+    _webAutoMutedSubscription?.cancel();
     _playingSubscription?.cancel();
     _completedSubscription?.cancel();
     _focusNode.dispose();
-    _player.dispose();
+    _webBridge?.dispose();
+    _player?.dispose();
     super.dispose();
   }
 
@@ -704,9 +841,15 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
+              if (kIsWeb && _isWebAutoMuted) {
+                _webBridge?.unmuteFromUserGesture(_volume);
+                _showIndicator('Sonido activado', IconsaxPlusLinear.volume_high);
+                _showControls();
+                return;
+              }
               if (AdaptiveLayout.isDesktop(context) || kIsWeb) {
                 // Single click on desktop/web toggles play/pause
-                _player.playOrPause();
+                _playOrPauseUnified();
                 _showControls();
               } else {
                 _toggleControls();
@@ -720,12 +863,63 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
               children: [
                 // The Video Layer
                 Positioned.fill(
-                  child: Video(
-                    controller: _controller,
-                    controls: NoVideoControls,
-                    fit: _videoFit,
-                  ),
+                  child: kIsWeb
+                      ? _webBridge!.buildVideoWidget(fit: _videoFit)
+                      : Video(
+                          controller: _controller!,
+                          controls: NoVideoControls,
+                          fit: _videoFit,
+                        ),
                 ),
+
+                // Web Auto-Muted Unmute Banner (if browser blocked unmuted autoplay)
+                if (kIsWeb && _isWebAutoMuted && !_isInitialLoading)
+                  Positioned(
+                    top: 86,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(30),
+                          onTap: () {
+                            _webBridge?.unmuteFromUserGesture(_volume);
+                            _showIndicator('Sonido activado', IconsaxPlusLinear.volume_high);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(30),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black54,
+                                  blurRadius: 14,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(IconsaxPlusBold.volume_cross, color: Colors.white, size: 18),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Tocá para activar el sonido',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // Center Initial Loading Overlay with Live Torrent/Stream Metrics
                 if (_isInitialLoading && _playbackError == null)
@@ -868,9 +1062,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
                 // Center Animated Play Button when paused and controls are visible
                 StreamBuilder<bool>(
-                  stream: _player.stream.playing,
+                  stream: _playingStream,
                   builder: (context, playingSnap) {
-                    final isPlaying = playingSnap.data ?? true;
+                    final isPlaying = playingSnap.data ?? _isPlayingNow;
                     return IgnorePointer(
                       ignoring: isPlaying || !_isControlsVisible,
                       child: Center(
@@ -894,7 +1088,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                               iconSize: 64,
                               icon: const Icon(IconsaxPlusBold.play, color: Colors.white),
                               onPressed: () {
-                                _player.play();
+                                _playUnified();
                                 _showControls();
                               },
                             ),
@@ -1209,11 +1403,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
   Widget _buildProgressBar() {
     return StreamBuilder<Duration>(
-      stream: _player.stream.position,
+      stream: _positionStream,
       builder: (context, posSnap) {
-        final position = posSnap.data ?? Duration.zero;
-        final duration = _player.state.duration;
-        final buffer = _player.state.buffer;
+        final position = posSnap.data ?? _currentPosition;
+        final duration = _currentDuration;
+        final buffer = _currentBuffer;
 
         final posSec = position.inSeconds.toDouble();
         final totalSec = duration.inSeconds.toDouble();
@@ -1244,7 +1438,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                   secondaryTrackValue: totalSec > 0 ? buffSec.clamp(0.0, totalSec) : null,
                   onChanged: (val) {
                     _showControls();
-                    _player.seek(Duration(seconds: val.toInt()));
+                    _seekUnified(Duration(seconds: val.toInt()));
                   },
                 ),
               ),
@@ -1262,9 +1456,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
   Widget _buildBottomControlsRow() {
     return StreamBuilder<bool>(
-      stream: _player.stream.playing,
+      stream: _playingStream,
       builder: (context, playingSnap) {
-        final isPlaying = playingSnap.data ?? true;
+        final isPlaying = playingSnap.data ?? _isPlayingNow;
 
         return Row(
           children: [
@@ -1275,7 +1469,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
               color: Colors.white,
               icon: Icon(isPlaying ? IconsaxPlusBold.pause : IconsaxPlusBold.play),
               onPressed: () {
-                _player.playOrPause();
+                _playOrPauseUnified();
                 _showControls();
               },
             ),
@@ -1485,8 +1679,14 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                                 ? const Icon(Icons.check, color: Color(0xFF8B5CF6))
                                 : null,
                             onTap: () {
-                              _player.setSubtitleTrack(mpv.SubtitleTrack.no());
-                              setState(() => _currentSubtitleTrack = mpv.SubtitleTrack.no());
+                              final noSub = mpv.SubtitleTrack.no();
+                              if (kIsWeb) {
+                                final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
+                                _webBridge?.setSubtitleTrack(noSub, serverBaseUrl: serverUrl);
+                              } else {
+                                _player?.setSubtitleTrack(noSub);
+                              }
+                              setState(() => _currentSubtitleTrack = noSub);
                               Navigator.pop(context);
                             },
                           ),
@@ -1515,7 +1715,12 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                                       ? const Icon(Icons.check, color: Color(0xFF8B5CF6))
                                       : null,
                                   onTap: () {
-                                    _player.setSubtitleTrack(sub);
+                                    if (kIsWeb) {
+                                      final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
+                                      _webBridge?.setSubtitleTrack(sub, serverBaseUrl: serverUrl);
+                                    } else {
+                                      _player?.setSubtitleTrack(sub);
+                                    }
                                     setState(() => _currentSubtitleTrack = sub);
                                     Navigator.pop(context);
                                   },
@@ -1551,7 +1756,12 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                                     title: extSub.displayTitle,
                                     language: extSub.lang,
                                   );
-                                  _player.setSubtitleTrack(track);
+                                  if (kIsWeb) {
+                                    final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
+                                    _webBridge?.setSubtitleTrack(track, serverBaseUrl: serverUrl);
+                                  } else {
+                                    _player?.setSubtitleTrack(track);
+                                  }
                                   setState(() => _currentSubtitleTrack = track);
                                   _showIndicator('Subtítulo: ${extSub.displayTitle}', IconsaxPlusLinear.subtitle);
                                   Navigator.pop(context);
@@ -1771,7 +1981,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                           child: InkWell(
                             borderRadius: BorderRadius.circular(14),
                             onTap: () {
-                              _player.setAudioTrack(audio);
+                              if (kIsWeb) {
+                                _webBridge?.setAudioTrack(audio);
+                              } else {
+                                _player?.setAudioTrack(audio);
+                              }
                               setState(() => _currentAudioTrack = audio);
                               _showIndicator('Audio: $langName', IconsaxPlusLinear.audio_square);
                               Navigator.pop(context);

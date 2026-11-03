@@ -6,25 +6,34 @@ Este documento centraliza todas las tareas completadas, pendientes, diagnóstico
 
 ## 📌 Estado Actual de Builds y CI (Multiplataforma)
 
-- **Windows Desktop x64**: ✅ **Operativo / Exitoso** (Ejecutable e Instalador Inno Setup compilando sin errores).
-- **Linux Desktop x64**: ✅ **Operativo / Exitoso** (Corregido error de sintaxis en `stremio_detail_screen.dart`, artifact generado).
-- **Android APK**: 🔄 Compilando en CI / Verificado soporte de streaming serverless.
-- **macOS Universal**: 🔄 Compilando en CI.
-- **Web App**: ✅ Desplegado en `https://stremio.valeryjl.com.ar/`.
+- **Windows Desktop x64**: ✅ **Operativo / Exitoso** (`Valkery-Stremio-Client-Windows-x64` y `Valkery-Windows-Installer` publicados en CI).
+- **Linux Desktop x64**: ✅ **Operativo / Exitoso** (`Valkery-Stremio-Client-Linux-x64` publicado en CI).
+- **macOS Universal**: ✅ **Operativo / Exitoso** (`Valkery-Stremio-Client-macOS` publicado en CI).
+- **Android APK**: ✅ **Operativo / Exitoso** (`Valkery-Stremio-Client-Android-APK` publicado en CI).
+- **Web App**: 🔄 Desplegando en `https://stremio.valeryjl.com.ar/` con soporte de `hls.js` y selector avanzado de audio.
 
 ---
 
-## 🔍 Diagnóstico Técnico: Reproducción Web en Chrome ("No anda el búfer")
+## 🔍 Diagnóstico Técnico: Reproducción Web en Chrome ("No anda el búfer") - [RESUELTO]
 
-### ¿Qué está ocurriendo exactamente?
-Al reproducir un torrent en el navegador (`https://stremio.valeryjl.com.ar/`):
-1. El servidor de Stremio **está funcionando a la perfección**: descarga a alta velocidad (descargó más de 250 MB con 28 pares activos) y transcodifica el video MKV/H.264 a HLS (`/hlsv2/.../master.m3u8` y `playlist.m3u8` con segmentos `.ts` que responden HTTP 206).
-2. La app detecta la duración y cantidad de pares ("me marca el tiempo y todo").
-3. **La causa raíz en Web**: Google Chrome en escritorio **no soporta HLS (`.m3u8` / MPEG-TS) de forma nativa** en el tag `<video>` de HTML5 (solo Safari en macOS/iOS tiene demuxer HLS nativo). Cuando Chrome intenta leer los fragmentos `.ts` sin una librería puente, el elemento `<video>` emite un `MEDIA_ELEMENT_ERROR: Format error`.
-4. El reproductor de Valkery recibe este error del navegador y activa el cartel de error con el botón *"Reintentar búfer"*.
+### Causa Identificada y Solución Aplicada:
+1. **Falta de HLS nativo en Chrome Desktop**: Se inyectó **`hls.js`** en `web/index.html` con CDN y fallback local asegurando que `window.Hls` esté siempre disponible al arrancar la app.
+2. **Encabezados CORS para segmentos HLS**: Se configuró `Access-Control-Expose-Headers: Content-Range, Accept-Ranges, Content-Length, Content-Type` en Nginx para que `hls.js` inspeccione metadatos de fragmentos sin restricciones.
+3. **Manejo de Políticas de Autoplay**: Se ajustó `_errorSubscription` en `stremio_player_screen.dart` para interceptar restricciones de autoplay (`NotAllowedError` / interrupción por falta de interacción) sin provocar error fatal en la interfaz. Al pausarse por autoplay, el botón central de Play queda activo para arrancar al primer clic.
+4. **Protección de Duración**: Si la duración o posición ya fue demuxada (`duration > 0`), los errores transitorios de búfer ya no abortan el reproductor ni cancelan las estadísticas de torrent.
 
-### Solución Encolada para Web:
-- Integrar **`hls.js`** en `web/index.html` o un puente JS interop para que Chrome/Firefox/Edge decodifiquen y reproduzcan los segmentos HLS `.ts` en tiempo real mediante Media Source Extensions (MSE).
+---
+
+## 🎵 Selector Avanzado de Pistas de Audio (Top Bar, Bottom Bar, Atajo 'A') - [COMPLETADO]
+
+- [x] **Traducción y Mapeo Inteligente de Idiomas**: Mapeo automático de códigos de lenguaje (`spa`/`esp` -> `Español (Castellano)`, `lat`/`es-419` -> `Español (Latino)`, `eng` -> `Inglés`, `jpn` -> `Japonés`, etc.).
+- [x] **Detección de Canales y Códecs**: Etiquetas dinámicas para Surround 5.1, 7.1, Estéreo, Dolby Atmos, TrueHD, Dolby Digital+ (E-AC-3), DTS, AAC y FLAC.
+- [x] **Interfaz Moderna**: Tarjetas con efecto hover/tap, indicador de reproducción activo en morado `#8B5CF6`, icono de volumen y checkmark de selección.
+- [x] **Acceso Rápido**:
+  - En la **Barra Superior**: Botón directo de Audio (`IconsaxPlusLinear.audio_square`) y Subtítulos junto a la insignia de calidad.
+  - En la **Barra Inferior**: Botón con resaltado de color si hay pista no predeterminada.
+  - En el **Menú de Opciones** (engranaje).
+  - Mediante **Atajo de Teclado**: Tecla **`A`** abre el selector de audio; tecla **`S`** o **`C`** abre el selector de subtítulos.
 
 ---
 
