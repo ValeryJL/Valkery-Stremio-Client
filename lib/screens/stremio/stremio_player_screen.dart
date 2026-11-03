@@ -119,6 +119,37 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
         debugPrint('[ValkeryPlayer/error] $err (loading: $_isInitialLoading, retry: $_openRetryCount)');
       }
 
+      final errStr = err.toString().toLowerCase();
+      // Browser autoplay / gesture restrictions or harmless load interruptions
+      final isAutoplayOrInterrupted = errStr.contains('notallowed') ||
+          errStr.contains('user didn\'t interact') ||
+          errStr.contains('gesture') ||
+          errStr.contains('interrupted') ||
+          errStr.contains('aborterror');
+
+      if (isAutoplayOrInterrupted) {
+        if (kDebugMode) {
+          debugPrint('[ValkeryPlayer] Browser autoplay suspended or interrupted; keeping player ready for user interaction.');
+        }
+        if (mounted) {
+          setState(() {
+            _playbackError = null;
+            _isInitialLoading = false;
+            _isControlsVisible = true;
+          });
+        }
+        return;
+      }
+
+      // If duration is already known, media container demuxing succeeded - transient errors are not fatal
+      final hasDecodedDuration = _player.state.duration > Duration.zero;
+      if (hasDecodedDuration) {
+        if (kDebugMode) {
+          debugPrint('[ValkeryPlayer] Non-fatal transient buffer alert while duration is known: $err');
+        }
+        return;
+      }
+
       // If initial loading failed and we have retries left (or active torrent swarm downloading), wait and re-open cleanly
       final bool hasActiveSwarm = _torrentPeers > 0 || _torrentDownloadedBytes > 0;
       final int effectiveMaxRetries = (kIsWeb || hasActiveSwarm) ? _maxRetries : 10;
@@ -147,14 +178,24 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     });
 
     _durationSubscription = _player.stream.duration.listen((dur) {
-      if (dur > Duration.zero && mounted && _isInitialLoading) {
-        setState(() => _isInitialLoading = false);
+      if (dur > Duration.zero && mounted) {
+        if (_isInitialLoading || _playbackError != null) {
+          setState(() {
+            _isInitialLoading = false;
+            _playbackError = null;
+          });
+        }
       }
     });
 
     _positionSubscription = _player.stream.position.listen((pos) {
-      if (pos > Duration.zero && mounted && _isInitialLoading) {
-        setState(() => _isInitialLoading = false);
+      if (pos > Duration.zero && mounted) {
+        if (_isInitialLoading || _playbackError != null) {
+          setState(() {
+            _isInitialLoading = false;
+            _playbackError = null;
+          });
+        }
       }
     });
 
@@ -177,6 +218,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
     _playingSubscription = _player.stream.playing.listen((isPlaying) {
       if (isPlaying) {
+        if (mounted && _playbackError != null) {
+          setState(() => _playbackError = null);
+        }
         // Ensure audio is active and unmuted on Web & Native
         _player.setVolume(_volume);
       } else {
@@ -555,6 +599,10 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       _adjustVolume(-5);
     } else if (key == LogicalKeyboardKey.keyM) {
       _toggleMute();
+    } else if (key == LogicalKeyboardKey.keyA) {
+      _showAudioTracksSelectionDialog();
+    } else if (key == LogicalKeyboardKey.keyS || key == LogicalKeyboardKey.keyC) {
+      _showSubtitlesSelectionDialog();
     } else if (key == LogicalKeyboardKey.keyF) {
       fullScreenHelper.toggleFullScreen(ref);
     } else if (key == LogicalKeyboardKey.escape) {
@@ -1012,6 +1060,31 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+              ),
+              const SizedBox(width: 8),
+              // Audio Track Quick Button
+              IconButton(
+                tooltip: 'Pista de Audio (A)',
+                iconSize: 20,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                color: _currentAudioTrack.id != 'no' && _currentAudioTrack.id != 'auto'
+                    ? const Color(0xFFC4B5FD)
+                    : Colors.white70,
+                icon: const Icon(IconsaxPlusLinear.audio_square),
+                onPressed: _showAudioTracksSelectionDialog,
+              ),
+              // Subtitles Quick Button
+              IconButton(
+                tooltip: 'Subtítulos (S)',
+                iconSize: 20,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                color: _currentSubtitleTrack.id != 'no'
+                    ? const Color(0xFFC4B5FD)
+                    : Colors.white70,
+                icon: const Icon(IconsaxPlusLinear.subtitle),
+                onPressed: _showSubtitlesSelectionDialog,
               ),
             ],
           ),
@@ -1498,71 +1571,274 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     );
   }
 
+  String _formatAudioLanguage(String? lang) {
+    if (lang == null || lang.trim().isEmpty) return 'Audio Principal';
+    final l = lang.trim().toLowerCase();
+    switch (l) {
+      case 'spa':
+      case 'es':
+      case 'esp':
+        return 'Español (Castellano)';
+      case 'lat':
+      case 'es-419':
+      case 'es-la':
+      case 'latin':
+        return 'Español (Latino)';
+      case 'eng':
+      case 'en':
+      case 'en-us':
+      case 'en-gb':
+        return 'Inglés';
+      case 'jpn':
+      case 'ja':
+        return 'Japonés';
+      case 'por':
+      case 'pt':
+      case 'pt-br':
+        return 'Portugués';
+      case 'fra':
+      case 'fre':
+      case 'fr':
+        return 'Francés';
+      case 'deu':
+      case 'ger':
+      case 'de':
+        return 'Alemán';
+      case 'ita':
+      case 'it':
+        return 'Italiano';
+      case 'rus':
+      case 'ru':
+        return 'Ruso';
+      case 'kor':
+      case 'ko':
+        return 'Coreano';
+      case 'zho':
+      case 'chi':
+      case 'zh':
+        return 'Chino';
+      default:
+        return l.length <= 4 ? l.toUpperCase() : (l[0].toUpperCase() + l.substring(1));
+    }
+  }
+
+  String _formatAudioCodecAndChannels(mpv.AudioTrack audio) {
+    final parts = <String>[];
+    final title = (audio.title ?? '').toLowerCase();
+
+    // Channels
+    if (title.contains('7.1')) {
+      parts.add('7.1 Surround');
+    } else if (title.contains('5.1')) {
+      parts.add('5.1 Surround');
+    } else if (title.contains('stereo') || title.contains('2.0') || title.contains('estéreo')) {
+      parts.add('Estéreo');
+    }
+
+    // Codecs
+    if (title.contains('atmos')) {
+      parts.add('Dolby Atmos');
+    } else if (title.contains('truehd')) {
+      parts.add('Dolby TrueHD');
+    } else if (title.contains('eac3') || title.contains('ddp') || title.contains('dd+')) {
+      parts.add('Dolby Digital+');
+    } else if (title.contains('ac3') || title.contains('dd5.1') || title.contains('dolby digital')) {
+      parts.add('Dolby Digital');
+    } else if (title.contains('dts-hd')) {
+      parts.add('DTS-HD');
+    } else if (title.contains('dts')) {
+      parts.add('DTS');
+    } else if (title.contains('aac')) {
+      parts.add('AAC');
+    } else if (title.contains('flac')) {
+      parts.add('FLAC');
+    } else if (title.contains('opus')) {
+      parts.add('Opus');
+    }
+
+    if (parts.isEmpty) {
+      return audio.title?.isNotEmpty == true ? audio.title! : 'Pista ${audio.id}';
+    }
+    return parts.join(' • ');
+  }
+
   void _showAudioTracksSelectionDialog() {
     _showControls();
+    final validTracks = _audioTracks.where((a) => a.id != 'no').toList();
+
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF161426),
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return SafeArea(
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.65,
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
+                // Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
                     children: [
-                      Icon(IconsaxPlusLinear.audio_square, color: Color(0xFF8B5CF6)),
-                      SizedBox(width: 10),
-                      Text(
-                        'Pistas de Audio',
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(IconsaxPlusLinear.audio_square, color: Color(0xFF8B5CF6), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Pistas de Audio',
+                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            'Selecciona el idioma o canal de doblaje deseado',
+                            style: TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                        onPressed: () => Navigator.pop(context),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 const Divider(color: Colors.white12, height: 1),
-                if (_audioTracks.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(24),
+                const SizedBox(height: 12),
+
+                // Track list or single track info
+                if (validTracks.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                     child: Center(
-                      child: Text('No se detectaron pistas de audio secundarias', style: TextStyle(color: Colors.white60)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(IconsaxPlusLinear.volume_high, color: Color(0xFF8B5CF6), size: 36),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Audio Original Activo',
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            kIsWeb
+                                ? 'En navegador Web, el audio se procesa automáticamente a estéreo de alta fidelidad (AAC).'
+                                : 'Este contenido cuenta con una única pista de audio principal activa.',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white54, fontSize: 13),
+                          ),
+                        ],
+                      ),
                     ),
                   )
                 else
                   Flexible(
-                    child: ListView(
+                    child: ListView.separated(
                       shrinkWrap: true,
-                      children: [
-                        for (final audio in _audioTracks)
-                          if (audio.id != 'no' && audio.id != 'auto')
-                            ListTile(
-                              dense: true,
-                              title: Text(
-                                audio.title?.isNotEmpty == true ? audio.title! : (audio.language ?? 'Pista ${audio.id}'),
-                                style: const TextStyle(color: Colors.white),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: validTracks.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final audio = validTracks[index];
+                        final isSelected = _currentAudioTrack.id == audio.id ||
+                            (audio.id == 'auto' && _currentAudioTrack.id.isEmpty);
+                        final langName = _formatAudioLanguage(audio.language ?? audio.title);
+                        final details = _formatAudioCodecAndChannels(audio);
+
+                        return Material(
+                          color: isSelected
+                              ? const Color(0xFF8B5CF6).withValues(alpha: 0.22)
+                              : Colors.white.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(14),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () {
+                              _player.setAudioTrack(audio);
+                              setState(() => _currentAudioTrack = audio);
+                              _showIndicator('Audio: $langName', IconsaxPlusLinear.audio_square);
+                              Navigator.pop(context);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFF8B5CF6) : Colors.transparent,
+                                  width: 1.5,
+                                ),
                               ),
-                              subtitle: audio.language != null
-                                  ? Text(audio.language!, style: const TextStyle(color: Colors.white54, fontSize: 11))
-                                  : null,
-                              trailing: _currentAudioTrack.id == audio.id
-                                  ? const Icon(Icons.check, color: Color(0xFF8B5CF6))
-                                  : null,
-                              onTap: () {
-                                _player.setAudioTrack(audio);
-                                setState(() => _currentAudioTrack = audio);
-                                _showIndicator('Audio: ${audio.title ?? audio.language ?? audio.id}', IconsaxPlusLinear.audio_square);
-                                Navigator.pop(context);
-                              },
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? const Color(0xFF8B5CF6).withValues(alpha: 0.3)
+                                          : Colors.white.withValues(alpha: 0.08),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      IconsaxPlusLinear.volume_high,
+                                      size: 18,
+                                      color: isSelected ? Colors.white : Colors.white60,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          langName,
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                          ),
+                                        ),
+                                        if (details.isNotEmpty && details != langName) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            details,
+                                            style: TextStyle(
+                                              color: isSelected ? const Color(0xFFC4B5FD) : Colors.white54,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    const Icon(
+                                      IconsaxPlusBold.tick_circle,
+                                      color: Color(0xFF8B5CF6),
+                                      size: 22,
+                                    ),
+                                ],
+                              ),
                             ),
-                      ],
+                          ),
+                        );
+                      },
                     ),
                   ),
               ],
@@ -1607,6 +1883,34 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                 ),
                 const SizedBox(height: 12),
                 const Divider(color: Colors.white12, height: 1),
+                ListTile(
+                  leading: const Icon(IconsaxPlusLinear.audio_square, color: Color(0xFF8B5CF6)),
+                  title: const Text('Pistas de Audio', style: TextStyle(color: Colors.white)),
+                  subtitle: Text(
+                    _formatAudioLanguage(_currentAudioTrack.language ?? _currentAudioTrack.title),
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showAudioTracksSelectionDialog();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(IconsaxPlusLinear.subtitle, color: Color(0xFF8B5CF6)),
+                  title: const Text('Subtítulos', style: TextStyle(color: Colors.white)),
+                  subtitle: Text(
+                    _currentSubtitleTrack.id == 'no'
+                        ? 'Desactivados'
+                        : (_currentSubtitleTrack.title?.isNotEmpty == true
+                            ? _currentSubtitleTrack.title!
+                            : (_currentSubtitleTrack.language ?? 'Activados')),
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showSubtitlesSelectionDialog();
+                  },
+                ),
                 ListTile(
                   leading: const Icon(Icons.aspect_ratio, color: Colors.white70),
                   title: const Text('Ajuste de pantalla', style: TextStyle(color: Colors.white)),

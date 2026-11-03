@@ -19,6 +19,14 @@
 
   <title>Valkery Stremio</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- HLS.js for full cross-browser video streaming in Chrome, Firefox, Edge, Safari -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.10/hls.min.js"></script>
+  <script>
+    if (!window.Hls) {
+      document.write('<script src="assets/packages/media_kit/assets/web/hls1.4.10.js"><\/script>');
+    }
+  </script>
 </head>
 <body>
   <script>
