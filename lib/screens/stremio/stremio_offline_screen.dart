@@ -577,7 +577,7 @@ class _StremioOfflineScreenState extends ConsumerState<StremioOfflineScreen> {
           // 5. Downloaded Movies Section
           if (movieDownloads.isNotEmpty) ...[
             _buildSectionHeader(
-              icon: IconsaxPlusBold.film_play,
+              icon: IconsaxPlusBold.video,
               title: 'Películas descargadas (${movieDownloads.length})',
               color: const Color(0xFF10B981),
             ),
@@ -747,7 +747,7 @@ class _StremioOfflineScreenState extends ConsumerState<StremioOfflineScreen> {
                   ),
                   const SizedBox(width: 8),
                   _buildMetricChip(
-                    icon: IconsaxPlusLinear.film_play,
+                    icon: IconsaxPlusLinear.video,
                     label: '$movieCount pelis',
                   ),
                   const SizedBox(width: 8),

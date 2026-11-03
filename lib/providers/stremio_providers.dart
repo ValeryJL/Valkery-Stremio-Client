@@ -52,7 +52,9 @@ final stremioOfflineDownloadManagerProvider = Provider<StremioOfflineDownloadMan
 });
 
 /// Manual Forced Offline Mode Provider (Desktop & Mobile & Web).
-final stremioOfflineModeProvider = StateNotifierProvider<StremioOfflineModeNotifier, bool>((ref) {
+final StateNotifierProvider<StremioOfflineModeNotifier, bool>
+    stremioOfflineModeProvider =
+    StateNotifierProvider<StremioOfflineModeNotifier, bool>((ref) {
   final storage = ref.watch(stremioStorageProvider);
   final processManager = ref.watch(stremioServerProcessManagerProvider);
   final api = ref.watch(stremioApiServiceProvider);

@@ -640,7 +640,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
             lang: lt.language,
             url: lt.localPath,
             label: 'Offline #${i + 1}',
-            source: 'Local Offline',
+            addonName: 'Local Offline',
           ),
         );
       }
