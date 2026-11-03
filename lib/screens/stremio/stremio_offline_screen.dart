@@ -683,10 +683,6 @@ class _StremioOfflineScreenState extends ConsumerState<StremioOfflineScreen> {
       ),
     );
   }
-        ],
-      ),
-    );
-  }
 
   Widget _buildOverviewCard({
     required bool isOfflineMode,

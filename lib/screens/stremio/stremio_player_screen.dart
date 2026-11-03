@@ -10,6 +10,8 @@ import 'package:http/http.dart' as http;
 import 'package:iconsax_plus/iconsax_plus.dart';
 import 'package:media_kit/media_kit.dart' as mpv;
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../models/stremio/media_item.dart' as stremio_model;
 import '../../models/stremio/stream_candidate.dart';
@@ -80,6 +82,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
   // Audio & Subtitles
   List<mpv.SubtitleTrack> _embeddedSubtitles = [];
+  final Set<String> _initialContainerSubtitleIds = {};
+  bool _hasLockedContainerSubtitles = false;
+  String? _selectedSubtitleId;
   List<stremio_model.SubtitleTrack> _externalSubtitles = [];
   bool _isLoadingExternalSubs = false;
   mpv.SubtitleTrack _currentSubtitleTrack = mpv.SubtitleTrack.no();
@@ -285,11 +290,22 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
       _tracksSubscription = player.stream.tracks.listen((tracks) {
         if (mounted) {
+          // Si aún no se bloquearon las pistas del contenedor, guardamos los IDs iniciales
+          if (!_hasLockedContainerSubtitles && tracks.subtitle.isNotEmpty) {
+            for (final s in tracks.subtitle) {
+              if (s.id != 'no' && s.id != 'auto') {
+                _initialContainerSubtitleIds.add(s.id);
+              }
+            }
+          }
+
           // Filtrar las pistas de subtítulos para evitar duplicar pistas externas añadidas dinámicamente como "Incrustado MKV"
-          // En media_kit, s.uri es un bool que indica si la pista fue cargada dinámicamente desde un URI/archivo
           final nativeTracks = tracks.subtitle.where((s) {
-            if (s.uri == true) return false;
-            return true;
+            if (s.id == 'no' || s.id == 'auto') return false;
+            if (_hasLockedContainerSubtitles || _initialContainerSubtitleIds.isNotEmpty) {
+              return _initialContainerSubtitleIds.contains(s.id);
+            }
+            return s.uri != true;
           }).toList();
 
           setState(() {
@@ -430,9 +446,26 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     try {
       if (!kIsWeb && _player?.platform is mpv.NativePlayer) {
         final np = _player!.platform as dynamic;
-        await np.setProperty('hwdec', 'auto-safe');
-        await np.setProperty('demuxer-max-bytes', '256M');
-        await np.setProperty('demuxer-readahead-secs', '30');
+
+        final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+        if (isDesktop) {
+          await np.setProperty('hwdec', 'auto-safe');
+          await np.setProperty('demuxer-max-bytes', '256M');
+          await np.setProperty('demuxer-readahead-secs', '30');
+        } else if (Platform.isAndroid) {
+          // En Android media_kit maneja mediacodec nativamente mediante SurfaceTexture.
+          // Forzar hwdec=auto-safe sobreescribe el decoder y congela los cuadros de video
+          // mientras que el audio sigue avanzando.
+          await np.setProperty('framedrop', 'vo');
+          await np.setProperty('video-sync', 'audio');
+          await np.setProperty('hr-seek', 'yes');
+          await np.setProperty('demuxer-max-bytes', '64M');
+          await np.setProperty('demuxer-readahead-secs', '15');
+        } else if (Platform.isIOS) {
+          await np.setProperty('hwdec', 'auto');
+          await np.setProperty('demuxer-max-bytes', '64M');
+        }
+
         await np.setProperty('network-timeout', '60');
         await np.setProperty('cache', 'yes');
         await np.setProperty('stream-lavf-o', 'reconnect_streamed=1,reconnect_delay_max=5');
@@ -491,6 +524,8 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
 
   Future<void> _openStreamInPlayer() async {
     if (!mounted) return;
+    _hasLockedContainerSubtitles = false;
+    _initialContainerSubtitleIds.clear();
     final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
     final directUrl = widget.localFilePath ?? widget.stream.playbackUrlFor(serverUrl);
     final url = widget.localFilePath ??
@@ -622,19 +657,72 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
     return '${kb.toStringAsFixed(0)} KB/s';
   }
 
-  void _applySubtitleTrack(mpv.SubtitleTrack track, {String? indicatorLabel}) {
+  Future<String> _sanitizeSubtitleSource(String urlOrPath) async {
+    try {
+      String content;
+      if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
+        final res = await http.get(Uri.parse(urlOrPath)).timeout(const Duration(seconds: 6));
+        if (res.statusCode == 200) {
+          content = utf8.decode(res.bodyBytes, allowMalformed: true);
+        } else {
+          return urlOrPath;
+        }
+      } else {
+        final f = File(urlOrPath);
+        if (!f.existsSync()) return urlOrPath;
+        content = await f.readAsString();
+      }
+
+      final citeRegex = RegExp(r'\[cite(?:_start|_end|:\s*[^\]]*)?\]', caseSensitive: false);
+      if (!citeRegex.hasMatch(content)) {
+        if (!urlOrPath.startsWith('http')) return urlOrPath;
+      }
+
+      final cleanContent = content.replaceAll(citeRegex, '');
+      final tempDir = await getTemporaryDirectory();
+      final cleanFile = File(p.join(
+        tempDir.path,
+        'valkery_sub_${DateTime.now().microsecondsSinceEpoch}.srt',
+      ));
+      await cleanFile.writeAsString(cleanContent, encoding: utf8);
+      return cleanFile.path;
+    } catch (_) {
+      return urlOrPath;
+    }
+  }
+
+  Future<void> _applySubtitleTrack(
+    mpv.SubtitleTrack track, {
+    String? indicatorLabel,
+    String? selectionKey,
+    bool isExternal = false,
+  }) async {
     if (!mounted) return;
+    _hasLockedContainerSubtitles = true;
+
     setState(() {
+      _selectedSubtitleId = selectionKey ?? track.id;
       _currentSubtitleTrack = track;
       if (track.id == 'no') {
         _webSubtitleText = null;
       }
     });
+
+    mpv.SubtitleTrack effectiveTrack = track;
+    if (isExternal && track.uri && track.id.isNotEmpty && !kIsWeb) {
+      final sanitizedUri = await _sanitizeSubtitleSource(track.id);
+      effectiveTrack = mpv.SubtitleTrack.uri(
+        sanitizedUri,
+        title: track.title,
+        language: track.language,
+      );
+    }
+
     if (kIsWeb) {
       final serverUrl = ref.read(sourceCoordinatorProvider).stremioServerUrl;
-      _webBridge?.setSubtitleTrack(track, serverBaseUrl: serverUrl);
+      _webBridge?.setSubtitleTrack(effectiveTrack, serverBaseUrl: serverUrl);
     } else {
-      _player?.setSubtitleTrack(track);
+      _player?.setSubtitleTrack(effectiveTrack);
     }
     if (indicatorLabel != null && indicatorLabel.isNotEmpty) {
       _showIndicator('Subtítulo: $indicatorLabel', IconsaxPlusLinear.subtitle);
@@ -648,6 +736,22 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
       for (var i = 0; i < widget.localSubtitles!.length; i++) {
         final lt = widget.localSubtitles![i];
         if (lt.localPath.isEmpty) continue;
+
+        // Limpiar archivo local en el disco si contiene artefactos [cite: ...]
+        final subFile = File(lt.localPath);
+        if (subFile.existsSync()) {
+          try {
+            final raw = subFile.readAsStringSync();
+            if (raw.contains('[cite')) {
+              final cleaned = raw.replaceAll(
+                RegExp(r'\[cite(?:_start|_end|:\s*[^\]]*)?\]', caseSensitive: false),
+                '',
+              );
+              subFile.writeAsStringSync(cleaned, encoding: utf8);
+            }
+          } catch (_) {}
+        }
+
         localTracks.add(
           stremio_model.SubtitleTrack(
             id: 'offline_sub_$i',
@@ -688,7 +792,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
               title: preferred.displayTitle,
               language: preferred.lang,
             );
-            _applySubtitleTrack(autoTrack);
+            _applySubtitleTrack(
+              autoTrack,
+              selectionKey: preferred.url,
+              isExternal: true,
+            );
           } else if (_embeddedSubtitles.isNotEmpty) {
             final spanishEmbedded = _embeddedSubtitles.where((s) {
               final l = (s.language ?? '').toLowerCase();
@@ -696,7 +804,10 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
               return l.contains('spa') || l == 'es' || l.contains('lat') || t.contains('espa') || t.contains('spa');
             }).firstOrNull;
             if (spanishEmbedded != null) {
-              _applySubtitleTrack(spanishEmbedded);
+              _applySubtitleTrack(
+                spanishEmbedded,
+                selectionKey: spanishEmbedded.id,
+              );
             }
           }
         }
@@ -2025,7 +2136,7 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
               }
             }
 
-            final isSubOff = _currentSubtitleTrack.id == 'no';
+            final isSubOff = _selectedSubtitleId == 'no' || (_selectedSubtitleId == null && _currentSubtitleTrack.id == 'no');
 
             return SafeArea(
               child: Container(
@@ -2234,7 +2345,11 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                                       ? const Icon(IconsaxPlusBold.tick_circle, color: Color(0xFF8B5CF6), size: 20)
                                       : null,
                                   onTap: () {
-                                    _applySubtitleTrack(mpv.SubtitleTrack.no(), indicatorLabel: 'Desactivados');
+                                    _applySubtitleTrack(
+                                      mpv.SubtitleTrack.no(),
+                                      selectionKey: 'no',
+                                      indicatorLabel: 'Desactivados',
+                                    );
                                     Navigator.pop(context);
                                   },
                                 ),
@@ -2295,7 +2410,9 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                             for (final item in entry.value)
                               Builder(
                                 builder: (context) {
-                                  final isSelected = _currentSubtitleTrack.id == item.id;
+                                  final isSelected = _selectedSubtitleId != null
+                                      ? _selectedSubtitleId == item.id
+                                      : (_currentSubtitleTrack.id == item.id);
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 6),
                                     child: Material(
@@ -2308,6 +2425,8 @@ class _StremioPlayerScreenState extends ConsumerState<StremioPlayerScreen> {
                                         onTap: () {
                                           _applySubtitleTrack(
                                             item.track,
+                                            selectionKey: item.id,
+                                            isExternal: !item.isEmbedded,
                                             indicatorLabel: '${item.languageGroup} • ${item.title}',
                                           );
                                           Navigator.pop(context);
